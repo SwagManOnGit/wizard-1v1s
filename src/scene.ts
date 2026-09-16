@@ -3,12 +3,14 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import wizardUrl from './assets/models/wizard.glb';
-import arenaUrl from './assets/models/arena.glb';
-import { ENEMY_Z, LANE_X, type EnemyTier } from './data';
+import castleUrl from './assets/models/arena.glb';
+import forestUrl from './assets/models/forest.glb';
+import caveUrl from './assets/models/cave.glb';
+import sanctumUrl from './assets/models/sanctum.glb';
+import { ENEMY_Z, LANE_X, PLAYER_LOOK, STAGE_THEME, enemyLook, stageForLevel, type EnemyDef, type HatStyle, type StageId, type WizardLook } from './data';
 import type { Battle, BattleEvent, Projectile } from './battle';
-import { MATERIAL_TEXTURE, texture } from './textures';
+import { MATERIAL_TEXTURE, UNLIT_MATERIALS, texture } from './textures';
 
-const PLAYER_LOOK = { robe: '#4a4fd0', hat: '#2e2fa8', trim: '#ffd23f' };
 /** Internal render resolution relative to CSS pixels: low on purpose for the PS2 look. */
 const RENDER_SCALE = 0.55;
 
@@ -20,6 +22,17 @@ function toLambert(src: THREE.Material, transparent: boolean): THREE.MeshLambert
   m.name = src.name;
   return m;
 }
+
+/** Glowing materials (flames, lava, crystals) ignore lighting entirely. */
+function toUnlit(src: THREE.Material): THREE.MeshBasicMaterial {
+  const kind = MATERIAL_TEXTURE[src.name];
+  const color = src.name === 'Flame' ? new THREE.Color('#ffb347') : new THREE.Color(1, 1, 1);
+  const m = new THREE.MeshBasicMaterial({ color, map: kind ? texture(kind) : null });
+  m.name = src.name;
+  return m;
+}
+
+const HAT_NODES: Record<HatStyle, string> = { pointy: 'Hat_Pointy', hood: 'Hat_Hood', crown: 'Hat_Crown', horns: 'Hat_Horns', wide: 'Hat_Wide', turban: 'Hat_Turban' };
 
 // ---- helpers ------------------------------------------------------------------
 function glowTexture(): THREE.Texture {
@@ -42,17 +55,30 @@ function col(hex: string): THREE.Color { return new THREE.Color(hex); }
 
 // ---- model cache -------------------------------------------------------------------
 let wizardModel: THREE.Group | null = null;
-let arenaModel: THREE.Group | null = null;
+const stageModels: Partial<Record<StageId, THREE.Group | null>> = {};
 let loadPromise: Promise<void> | null = null;
+const STAGE_URLS: Record<StageId, string> = { castle: castleUrl, forest: forestUrl, cave: caveUrl, sanctum: sanctumUrl };
 
 /** Loads the GLB models once; safe to call early (during the splash) and again later. */
 export function preloadModels(): Promise<void> {
   if (loadPromise) return loadPromise;
   const loader = new GLTFLoader();
   const load = (url: string): Promise<THREE.Group | null> => new Promise(res => loader.load(url, g => res(g.scene), undefined, () => res(null)));
-  loadPromise = Promise.all([load(wizardUrl), load(arenaUrl)]).then(([w, a]) => { wizardModel = w; arenaModel = a; });
+  const ids = Object.keys(STAGE_URLS) as StageId[];
+  loadPromise = Promise.all([load(wizardUrl), ...ids.map(id => load(STAGE_URLS[id]))]).then(([w, ...stages]) => {
+    wizardModel = w;
+    ids.forEach((id, i) => { stageModels[id] = stages[i]; });
+  });
   return loadPromise;
 }
+
+/** Stage light sprites (x, y, z in game units) and their glow colour. */
+const STAGE_LIGHTS: Record<StageId, { pos: [number, number, number][]; color: string; size: number }> = {
+  castle: { pos: [[-3.9, 2, 3], [3.9, 2, 3], [-3.9, 2, -9], [3.9, 2, -9], [-3.9, 2, -21], [3.9, 2, -21]], color: '#ffb060', size: 2.2 },
+  forest: { pos: [[-3.4, 3, 3], [3.4, 3, 3], [-3.4, 3, -9], [3.4, 3, -9], [-3.4, 3, -21], [3.4, 3, -21]], color: '#ffe08a', size: 1.8 },
+  cave: { pos: [[-6, 1.2, 0], [6, 1.2, 0], [-7, 1.2, -8], [7, 1.2, -8], [-6, 1.2, -16], [6, 1.2, -16], [0, 3.5, -25]], color: '#7df9ff', size: 3.6 },
+  sanctum: { pos: [[-3.6, 2.3, 3], [3.6, 2.3, 3], [-3.6, 2.3, -9], [3.6, 2.3, -9], [-3.6, 2.3, -21], [3.6, 2.3, -21], [-6.6, 8.3, 1], [6.6, 8.3, 1], [-6.6, 8.3, -10], [6.6, 8.3, -10], [-6.6, 8.3, -21], [6.6, 8.3, -21]], color: '#ff7a2a', size: 2.6 },
+};
 
 // ---- particles ------------------------------------------------------------------
 class Particles {
@@ -121,7 +147,6 @@ class Particles {
 }
 
 // ---- wizard -----------------------------------------------------------------------
-interface WizardLook { robe: string; hat: string; trim: string }
 type Std = THREE.MeshLambertMaterial;
 
 class Wizard {
@@ -136,6 +161,9 @@ class Wizard {
   private shieldWire: THREE.Mesh;
   private shieldMat: THREE.MeshBasicMaterial;
   private shieldWireMat: THREE.MeshBasicMaterial;
+  private hatNodes: Partial<Record<HatStyle, THREE.Object3D>> = {};
+  private beardNode: THREE.Object3D | null = null;
+  private capeNode: THREE.Object3D | null = null;
   readonly orb = new THREE.Object3D();
   bob = Math.random() * 6;
   castT = 0;
@@ -179,6 +207,9 @@ class Wizard {
     this.orbMat = new THREE.MeshBasicMaterial({ color: col(look.trim), transparent: true });
     if (orbNode) { orbNode.material = this.orbMat; this.allMats.push(this.orbMat); }
     this.staffPivot = inst.getObjectByName('ArmPivot') ?? new THREE.Group();
+    for (const [style, node] of Object.entries(HAT_NODES) as [HatStyle, string][]) { const n = inst.getObjectByName(node); if (n) this.hatNodes[style] = n; }
+    this.beardNode = inst.getObjectByName('Beard') ?? null;
+    this.capeNode = inst.getObjectByName('Cape') ?? null;
     this.orbGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col(look.trim), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 }));
     this.orbGlow.scale.set(1, 1, 1);
     if (orbNode) { orbNode.add(this.orb, this.orbGlow); }
@@ -209,8 +240,12 @@ class Wizard {
     this.mats.Cape?.color.set(look.hat);
     this.mats.Hat?.color.set(look.hat);
     this.mats.Trim?.color.set(look.trim);
+    this.mats.Skin?.color.set(look.skin);
     this.orbMat.color.set(look.trim);
     (this.orbGlow.material as THREE.SpriteMaterial).color.set(look.trim);
+    for (const [style, node] of Object.entries(this.hatNodes) as [HatStyle, THREE.Object3D][]) node.visible = style === look.hatStyle || (!this.hatNodes[look.hatStyle] && style === 'pointy');
+    if (this.beardNode) this.beardNode.visible = look.beard;
+    if (this.capeNode) this.capeNode.visible = look.cape;
   }
 
   reset(): void { this.deathT = -1; this.hitT = 0; this.castT = 0; this.hold = false; this.frozen = false; this.phased = false; this.tilt = 0; this.body.rotation.x = 0; this.group.position.y = 0; }
@@ -274,7 +309,6 @@ function makeSky(): { mesh: THREE.Mesh; top: THREE.Color; bottom: THREE.Color } 
 
 // ---- arena ---------------------------------------------------------------------------
 interface ProjView { group: THREE.Group; p: Projectile; ring?: THREE.Mesh; last: THREE.Vector3 }
-const BRAZIERS: [number, number][] = [[-3.9, 3], [3.9, 3], [-3.9, -9], [3.9, -9], [-3.9, -21], [3.9, -21]];
 
 export class Arena {
   readonly renderer: THREE.WebGLRenderer;
@@ -293,6 +327,9 @@ export class Arena {
   private sun: THREE.DirectionalLight;
   private sky: { mesh: THREE.Mesh; top: THREE.Color; bottom: THREE.Color };
   private bannerMat: Std | null = null;
+  private env: THREE.Object3D | null = null;
+  private stage: StageId | null = null;
+  private fallbackFloor: THREE.Mesh;
   private moon: THREE.Sprite;
   private shake = 0;
   private time = 0;
@@ -322,32 +359,10 @@ export class Arena {
     this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col('#e8ecff'), transparent: true, depthWrite: false, fog: false }));
     this.moon.position.set(-38, 48, -110); this.moon.scale.set(26, 26, 1); this.scene.add(this.moon);
 
-    // Environment: Blender model, or a plain floor as a fallback.
-    if (arenaModel) {
-      const env = arenaModel;
-      const converted = new Map<string, THREE.Material>();
-      env.traverse(o => {
-        const m = o as THREE.Mesh;
-        if (!m.isMesh) return;
-        const src = m.material as THREE.Material;
-        let mat = converted.get(src.name);
-        if (!mat) {
-          if (src.name === 'Flame') mat = new THREE.MeshBasicMaterial({ color: col('#ffb347') });
-          else { const lam = toLambert(src, false); if (src.name === 'Banner') this.bannerMat = lam; if (src.name.startsWith('Stone')) lam.color.multiplyScalar(0.95); mat = lam; }
-          converted.set(src.name, mat);
-        }
-        m.material = mat;
-        m.frustumCulled = true;
-      });
-      this.scene.add(env);
-    } else {
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 70), new THREE.MeshLambertMaterial({ color: col('#7a7a90'), map: texture('stone', 12) }));
-      floor.rotation.x = -Math.PI / 2; floor.position.z = -12; this.scene.add(floor);
-    }
-    for (const [x, z] of BRAZIERS) {
-      const t = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col('#ffb060'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      t.position.set(x, 2.0, z); t.scale.set(2.2, 2.2, 1); this.scene.add(t); this.torches.push(t);
-    }
+    // Fallback floor, shown only when a stage model failed to load.
+    this.fallbackFloor = new THREE.Mesh(new THREE.PlaneGeometry(40, 70), new THREE.MeshLambertMaterial({ color: col('#7a7a90'), map: texture('stone', 12) }));
+    this.fallbackFloor.rotation.x = -Math.PI / 2; this.fallbackFloor.position.z = -12; this.fallbackFloor.visible = false; this.scene.add(this.fallbackFloor);
+    this.setStage('castle');
 
     // Rune rings under each wizard.
     for (const z of [0, ENEMY_Z]) {
@@ -369,32 +384,75 @@ export class Arena {
     portalInner.position.copy(this.portal.position); this.scene.add(portalInner);
 
     this.player = new Wizard(PLAYER_LOOK, -1);
-    this.enemy = new Wizard({ robe: '#5b6b8c', hat: '#46527a', trim: '#c9d3ff' }, 1);
+    this.enemy = new Wizard({ ...PLAYER_LOOK, robe: '#6a7fd8', hat: '#4a56b0', trim: '#e0e8ff' }, 1);
     this.enemy.group.position.set(0, 0, ENEMY_Z);
     this.scene.add(this.player.group, this.enemy.group, this.particles.points);
 
-    this.setTheme({ sky: '#1b2140', fog: '#1b2140', floor: '#2c3358', spell: '#8ab4ff', robe: '#5b6b8c' });
+    this.setTheme({ sky: '#2438a0', fog: '#4a62c8', spell: '#8ab4ff', robe: '#6a7fd8' });
     this.resize();
   }
 
-  setTheme(t: { sky: string; fog: string; floor: string; spell: string; robe: string }): void {
-    this.scene.background = col(t.sky);
-    this.scene.fog = new THREE.Fog(col(t.fog), 20, 70);
-    this.sky.top.set(t.sky);
-    this.sky.bottom.set(t.fog).lerp(col(t.spell), 0.35);
+  /** Swaps the environment model and its light sprites. Models are converted to the PS2 materials once. */
+  setStage(id: StageId): void {
+    if (this.stage === id) return;
+    this.stage = id;
+    if (this.env) { this.scene.remove(this.env); this.env = null; }
+    for (const t of this.torches) this.scene.remove(t);
+    this.torches = [];
+    this.bannerMat = null;
+    const model = stageModels[id] ?? null;
+    if (model) {
+      if (!model.userData.converted) {
+        const converted = new Map<string, THREE.Material>();
+        model.traverse(o => {
+          const m = o as THREE.Mesh;
+          if (!m.isMesh) return;
+          const src = m.material as THREE.Material;
+          let mat = converted.get(src.name);
+          if (!mat) {
+            if (UNLIT_MATERIALS.has(src.name)) mat = toUnlit(src);
+            else { const lam = toLambert(src, false); if (src.name === 'Banner') model.userData.bannerMat = lam; if (src.name.startsWith('Stone')) lam.color.multiplyScalar(0.95); mat = lam; }
+            converted.set(src.name, mat);
+          }
+          m.material = mat;
+        });
+        model.userData.converted = true;
+      }
+      this.bannerMat = (model.userData.bannerMat as Std | undefined) ?? null;
+      this.env = model;
+      this.scene.add(model);
+    }
+    this.fallbackFloor.visible = !model;
+    const lights = STAGE_LIGHTS[id];
+    for (const [x, y, z] of lights.pos) {
+      const t = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col(lights.color), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      t.position.set(x, y, z); t.scale.set(lights.size, lights.size, 1); this.scene.add(t); this.torches.push(t);
+    }
+  }
+
+  setTheme(t: { sky: string; fog: string; spell: string; robe: string }): void {
+    const over = this.stage ? STAGE_THEME[this.stage] : undefined;
+    const sky = over?.sky ?? t.sky, fog = over?.fog ?? t.fog;
+    this.scene.background = col(sky);
+    this.scene.fog = new THREE.Fog(col(fog), this.stage === 'cave' ? 12 : 20, this.stage === 'cave' ? 45 : 70);
+    this.sky.top.set(sky);
+    this.sky.bottom.set(fog).lerp(col(t.spell), 0.35);
     this.portalMat.color.set(t.spell);
     this.hemi.color.set(t.spell).lerp(new THREE.Color(0xffffff), 0.4);
-    this.hemi.groundColor.set(t.fog);
+    this.hemi.groundColor.set(fog);
+    this.hemi.intensity = this.stage === 'cave' ? 0.95 : 0.55;
     this.sun.color.set('#fff1d6').lerp(col(t.spell), 0.3);
     if (this.bannerMat) this.bannerMat.color.set(t.robe).lerp(col(t.spell), 0.25);
   }
 
-  setEnemyLook(tier: EnemyTier, boss: boolean): void {
-    this.enemy.setLook(tier);
+  /** Dresses the enemy for this level, picks the stage and applies the palette. */
+  setEnemyLook(def: EnemyDef, boss: boolean): void {
+    this.enemy.setLook(enemyLook(def));
     this.enemy.group.scale.setScalar(boss ? 1.35 : 1);
     this.enemy.reset();
     this.player.reset();
-    this.setTheme(tier);
+    this.setStage(stageForLevel(def.level, boss));
+    this.setTheme(def.tier);
     for (const v of this.projViews.values()) this.scene.remove(v.group);
     this.projViews.clear();
     this.laneT = [0, 0, 0];

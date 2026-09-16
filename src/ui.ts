@@ -208,7 +208,7 @@ export class UI {
     for (const s of loadout) this.recognizer.add(s.id, GLYPHS[s.glyph].points);
 
     if (!this.arena) this.arena = new Arena(this.arenaEl);
-    this.arena.setEnemyLook(enemy.tier, enemy.boss && !training);
+    this.arena.setEnemyLook(enemy, enemy.boss && !training);
     this.arena.setRunning(true);
     this.buildHud(enemy, loadout);
     this.arenaOverlay.querySelectorAll('.popup, .banner').forEach(n => n.remove());

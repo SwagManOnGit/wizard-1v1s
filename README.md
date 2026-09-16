@@ -12,7 +12,9 @@ A wizard duelling game built as a **YouTube Playable**. Dodge left or right, dra
 - **Flow:** title screen, then a 100-tile level map (cleared, next, locked, bosses marked), then the battle. Shop and training are one tap from the title.
 - **Loadout** of 6 slots (up to 10 with the Grimoire upgrade). Only equipped spells are recognised, which keeps drawing accurate.
 - **Enemies** scale in health, damage and cast speed with level. From level 6 they fire double-lane bolts, from level 12 homing seekers (dodge late, or shield/reflect/phase), bosses add barrages, self-heals and shields. Ten enemy tiers with their own arena palette.
-- **Bosses** every 5 levels, 20 named bosses up to Archmage Zorvath at level 100.
+- **Bosses** every 5 levels, 20 named bosses up to Archmage Zorvath at level 100. Bosses fight in their own Lava Sanctum arena (obsidian floor, lava channels, obelisks, colossi and a throne).
+- **Arenas:** regular levels rotate through the Castle Courtyard, the Ruined Glade and the Crystal Cavern; each is a separate GLB stage swapped at battle start.
+- **Outfits:** every enemy is dressed per level from six hat styles (pointy, hood, crown, horns, wide, turban), six skin tones, hue-shifted tier robes, four trim colours, beard on or off and cape on or off, so neighbouring levels never look the same. Bosses wear crowns or horns.
 - **Shop** after every level: spells, 8 character upgrades, 20 pieces of gear in 4 slots (wand, robe, charm, boots) with painted tier emblems, rewarded ads for coins, and a training tab.
 - **Training** fights a dummy with endless health, shows damage and DPS, and can be switched to fight back for dodge practice.
 - **Coins** come from wins (bosses pay triple, replays 60%, losses 25%) and from rewarded ads (reward scales with your best level).
@@ -65,7 +67,7 @@ Creates `wizard-1v1s-playable.zip` from `dist/` (index.html at the root). Upload
 | All aspect ratios 9:32 to 32:9 | Portrait stacks arena over controls, landscape puts controls in a side panel; the 3D camera widens its field of view on tall screens |
 | Touch + mouse + keyboard | Pointer events for drawing and dodging, arrow keys / A / D dodge, Esc closes overlays and leaves training |
 | No exit button, no external links | None present |
-| Bundle size | ~1.3 MB uncompressed, 8 files, largest file 526 KB (three.js, slightly over the 512 KiB "should" guideline); the arena model is 491 KB and the wizard 168 KB |
+| Bundle size | ~2.3 MB uncompressed, 11 files, largest file 528 KB (three.js, slightly over the 512 KiB "should" guideline); stage models are 491, 291, 183 and 364 KB and the wizard 262 KB |
 
 ## Project layout
 
@@ -73,7 +75,7 @@ Creates `wizard-1v1s-playable.zip` from `dist/` (index.html at the root). Upload
 - `src/glyphs.ts` - the 24 stroke templates and the glyph icon painter
 - `src/recognizer.ts` - $1 unistroke recogniser (no rotation invariance, uniform scaling, stroke smoothing)
 - `src/battle.ts` - battle simulation (pure logic, emits events)
-- `src/scene.ts` - three.js arena: GLB wizard and environment models, sky dome, projectiles, particles, lane telegraphs
+- `src/scene.ts` - three.js arena: GLB wizard with swappable hats, four stage models, sky dome, projectiles, particles, lane telegraphs
 - `src/icons.ts` - pixel-art emblems for gear tiers and upgrades
 - `src/textures.ts` - procedural 64x64 nearest-filtered textures (stone, wood, cloth, gold, banner, roof) for the PS2 look
 - `src/ui.ts` - screens, HUD, draw pad, shop, training, result, fake ad
@@ -83,6 +85,6 @@ Creates `wizard-1v1s-playable.zip` from `dist/` (index.html at the root). Upload
 
 ## Art
 
-The wizard and the arena are Blender models exported as GLB (`src/assets/models/`), built with `bpy` scripts through the Blender MCP: a robed wizard with a curled hat, cape, beard, belt and a claw-topped staff on an `ArmPivot` node the game rotates to cast; and an arena of flagstones, pillars with stone arches, braziers, banners and a castle gate with towers, merged into one mesh per material (8 draw calls). Materials are named (`Robe`, `Hat`, `Trim`, `Banner`, ...) so the game recolours them per enemy tier at runtime. If a model fails to load the scene falls back to primitives. Gear and upgrade emblems are painted on canvas in `src/icons.ts`.
+The wizard and the four arenas are Blender models exported as GLB (`src/assets/models/`), built with `bpy` scripts through the Blender MCP: a robed wizard with six hat variants (`Hat_*` nodes toggled at runtime), cape, beard, belt and a claw-topped staff on an `ArmPivot` node the game rotates to cast; the castle courtyard, ruined glade, crystal cavern and lava sanctum, each merged into one mesh per material. Materials are named (`Robe`, `Hat`, `Trim`, `Banner`, ...) so the game recolours them per enemy tier at runtime. If a model fails to load the scene falls back to primitives. Gear and upgrade emblems are painted on canvas in `src/icons.ts`.
 
 To change the models, rebuild them in Blender and export again with `use_selection`, `export_apply`, Y-up, no textures; keep each file under 512 KiB.

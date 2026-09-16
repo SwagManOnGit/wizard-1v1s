@@ -199,6 +199,70 @@ function romanish(n: number): string {
   return suffixes[n % suffixes.length];
 }
 
+// ---- enemy outfits and stages -----------------------------------------------------
+export const HAT_STYLES = ['pointy', 'hood', 'crown', 'horns', 'wide', 'turban'] as const;
+export type HatStyle = typeof HAT_STYLES[number];
+export interface WizardLook { robe: string; hat: string; trim: string; skin: string; hatStyle: HatStyle; beard: boolean; cape: boolean }
+const SKINS = ['#e8c39e', '#c68a5a', '#9ad0a8', '#d0a8ff', '#a0a8b8', '#f0d0b0'];
+const TRIMS = ['#ffd23f', '#e8e8ff', '#ff9a5a', '#7df9ff'];
+
+function hexToHsl(hex: string): [number, number, number] {
+  const n = parseInt(hex.slice(1), 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
+  else if (max === g) h = ((b - r) / d + 2) / 6;
+  else h = ((r - g) / d + 4) / 6;
+  return [h, s, l];
+}
+function hslToHex(h: number, s: number, l: number): string {
+  const f = (n: number): number => { const k = (n + h * 12) % 12; const a = s * Math.min(l, 1 - l); return l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)); };
+  const to = (v: number): string => Math.round(Math.max(0, Math.min(1, v)) * 255).toString(16).padStart(2, '0');
+  return `#${to(f(0))}${to(f(8))}${to(f(4))}`;
+}
+/** Shifts a colour's hue (0..1 wraps) and nudges its lightness. */
+export function shiftColor(hex: string, hue: number, light = 0): string {
+  const [h, s, l] = hexToHsl(hex);
+  return hslToHex((h + hue + 1) % 1, s, Math.max(0.12, Math.min(0.85, l + light)));
+}
+
+/** A deterministic outfit per level so no two neighbouring wizards look alike. */
+export function enemyLook(def: EnemyDef): WizardLook {
+  const L = def.level, t = def.tier;
+  const hue = ((L * 37) % 5) * 0.06 - 0.12;
+  const light = ((L * 13) % 3) * 0.05 - 0.05;
+  const hatStyle: HatStyle = def.boss ? (L % 10 === 0 ? 'crown' : 'horns') : HAT_STYLES[(L * 7 + Math.floor(L / 7)) % HAT_STYLES.length];
+  return {
+    robe: shiftColor(t.robe, hue, light),
+    hat: shiftColor(t.hat, hue + (L % 2 ? 0.04 : -0.04), light),
+    trim: def.boss ? '#ffd23f' : TRIMS[(L * 3) % TRIMS.length],
+    skin: SKINS[(L * 5 + Math.floor(L / 6)) % SKINS.length],
+    hatStyle,
+    beard: L % 3 !== 1,
+    cape: def.boss || L % 2 === 0,
+  };
+}
+
+export const PLAYER_LOOK: WizardLook = { robe: '#4a4fd0', hat: '#2e2fa8', trim: '#ffd23f', skin: '#e8c39e', hatStyle: 'pointy', beard: true, cape: true };
+
+export type StageId = 'castle' | 'forest' | 'cave' | 'sanctum';
+export const STAGE_NAMES: Record<StageId, string> = { castle: 'Castle Courtyard', forest: 'Ruined Glade', cave: 'Crystal Cavern', sanctum: 'Lava Sanctum' };
+/** Regular levels rotate through three arenas; bosses always fight in the sanctum. */
+export function stageForLevel(level: number, boss: boolean): StageId {
+  if (boss) return 'sanctum';
+  return (['castle', 'forest', 'cave'] as StageId[])[(level - 1) % 3];
+}
+/** Optional sky and fog overrides per stage (merged over the enemy tier palette). */
+export const STAGE_THEME: Partial<Record<StageId, { sky: string; fog: string }>> = {
+  sanctum: { sky: '#3a0a12', fog: '#a02a20' },
+  cave: { sky: '#0a1030', fog: '#1a3a6a' },
+};
+
 export const TRAINING_DUMMY_HP = 1_000_000;
 export const AD_REWARD = (level: number): number => 60 + 25 * level;
 export const PLAYER_BASE = { hp: 100, mana: 100, regen: 10, iframes: 0.3, stamina: 100, staminaRegen: 22, dodgeCost: 30 };
