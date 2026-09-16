@@ -34,6 +34,7 @@ export interface Fighter {
 
 export interface PlayerState extends Fighter {
   mana: number; maxMana: number;
+  stamina: number; maxStamina: number;
   reflectT: number;
   phaseCharges: number; phaseT: number;
   hot: { perSec: number; t: number } | null;
@@ -70,7 +71,7 @@ export type BattleEvent =
   | { type: 'interrupt' }
   | { type: 'revive' }
   | { type: 'death'; who: Side }
-  | { type: 'fizzle'; reason: 'mana' | 'cooldown' };
+  | { type: 'fizzle'; reason: 'mana' | 'cooldown' | 'stamina' };
 
 export interface BattleOptions {
   enemy: EnemyDef;
@@ -111,7 +112,7 @@ export class Battle {
     const s = opts.stats;
     this.player = {
       hp: s.maxHp, maxHp: s.maxHp, shield: 0, shieldT: 0, lane: 1, dots: [],
-      mana: s.maxMana, maxMana: s.maxMana, reflectT: 0, phaseCharges: 0, phaseT: 0, hot: null,
+      mana: s.maxMana, maxMana: s.maxMana, stamina: s.maxStamina, maxStamina: s.maxStamina, reflectT: 0, phaseCharges: 0, phaseT: 0, hot: null,
       iframesT: 0, dodgeT: 9, dodgeDir: 0, revived: false,
     };
     const hp = this.training ? TRAINING_DUMMY_HP : opts.enemy.hp;
@@ -134,6 +135,8 @@ export class Battle {
     if (this.over) return false;
     const target = this.player.lane + dir;
     if (target < 0 || target >= LANES) return false;
+    if (this.player.stamina < this.stats.dodgeCost) { this.emit({ type: 'fizzle', reason: 'stamina' }); return false; }
+    this.player.stamina -= this.stats.dodgeCost;
     this.player.lane = target;
     this.player.iframesT = this.stats.iframes;
     this.player.dodgeT = 0;
@@ -200,6 +203,7 @@ export class Battle {
 
     // Player timers.
     p.mana = Math.min(p.maxMana, p.mana + this.stats.regen * dt);
+    p.stamina = Math.min(p.maxStamina, p.stamina + this.stats.staminaRegen * dt);
     p.iframesT = Math.max(0, p.iframesT - dt);
     p.dodgeT += dt;
     if (p.shieldT > 0) { p.shieldT -= dt; if (p.shieldT <= 0) p.shield = 0; }

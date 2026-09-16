@@ -3,6 +3,7 @@ import * as sdk from './sdk';
 import { pauseAudio, resumeAudio, setAudioEnabled } from './audio';
 import { parseSave } from './save';
 import { UI, showSplash } from './ui';
+import { preloadModels } from './scene';
 import { GLYPHS } from './glyphs';
 import { Recognizer } from './recognizer';
 import { SPELLS, SPELL_BY_ID, enemyForLevel } from './data';
@@ -26,6 +27,7 @@ async function boot(): Promise<void> {
   const splashDone = showSplash(root);
   const [raw] = await Promise.all([
     sdk.loadData(),
+    preloadModels(),
     document.fonts ? document.fonts.ready.then(() => undefined) : Promise.resolve(),
   ]);
   const save = parseSave(raw);

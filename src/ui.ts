@@ -7,6 +7,7 @@ import {
   type EnemyDef, type SpellDef,
 } from './data';
 import { GLYPHS, drawGlyph, type Point } from './glyphs';
+import { gearIcon, slotIcon, upgradeIcon } from './icons';
 import { Recognizer } from './recognizer';
 import { computeStats, type SaveData } from './save';
 import { Arena } from './scene';
@@ -72,8 +73,9 @@ export class UI {
   private battleLevel = 1;
   private hud!: {
     enemyName: HTMLElement; enemyTag: HTMLElement; enemyLvl: HTMLElement; enemyFill: HTMLElement; enemyShield: HTMLElement; enemyTxt: HTMLElement;
-    hpFill: HTMLElement; hpShield: HTMLElement; hpTxt: HTMLElement; manaFill: HTMLElement; manaTxt: HTMLElement; buffs: HTMLElement; enemyBuffs: HTMLElement;
-    trainStats: HTMLElement; sparBtn: HTMLButtonElement; chips: Map<string, HTMLElement>; castMsg: HTMLElement; pad: HTMLCanvasElement;
+    hpFill: HTMLElement; hpShield: HTMLElement; hpTxt: HTMLElement; manaFill: HTMLElement; manaTxt: HTMLElement; stamFill: HTMLElement; stamTxt: HTMLElement;
+    buffs: HTMLElement; enemyBuffs: HTMLElement;
+    trainStats: HTMLElement; sparBtn: HTMLButtonElement; chips: Map<string, HTMLElement>; castMsg: HTMLElement; pad: HTMLCanvasElement; dodgeBtns: HTMLButtonElement[];
   };
   private padPoints: Point[] = [];
   private padDrawing = false;
@@ -119,6 +121,7 @@ export class UI {
   }
 
   private show(id: ScreenId): void {
+    if (this.overlayDismiss) this.overlayDismiss();
     for (const [k, s] of Object.entries(this.screens)) s.classList.toggle('active', k === id);
   }
 
@@ -132,7 +135,7 @@ export class UI {
     m.innerHTML = '';
     const title = el('div', 'title'); title.innerHTML = 'WIZARD <span>1v1s</span>';
     const sub = el('div', 'subtitle', 'Dodge. Draw. Destroy.');
-    const card = el('div', 'menu-card');
+    const card = el('div', 'menu-card frame');
 
     const coins = el('div', 'coins', fmt(this.save.coins));
     const best = el('div', 'stats-line', this.save.best ? `Best: level ${this.save.best} cleared` : 'No levels cleared yet');
@@ -153,7 +156,7 @@ export class UI {
     const play = btn('BATTLE', 'gold big', () => this.startBattle(this.pickedLevel, false));
     const row = el('div', 'menu-row');
     row.append(btn('Shop', '', () => this.showShop('spells')), btn('Training', '', () => this.startBattle(this.pickedLevel, true)));
-    card.append(coins, pickRow, play, row, best);
+    card.append(coins, el('div', 'divider'), pickRow, play, row, el('div', 'divider'), best);
     const howto = el('div', 'howto', 'Draw a spell glyph on the pad to cast it. Spells lock on by themselves. Tap the side buttons (or swipe) to dodge the enemy\'s bolts. Win coins, buy spells, beat 100 levels.');
     m.append(title, sub, card, howto);
     this.show('menu');
@@ -229,7 +232,9 @@ export class UI {
     hb.append(hpShield, hpFill, hpTxt);
     const mb = el('div', 'bar mana'); const manaFill = el('div', 'fill'); const manaTxt = el('div', 'txt');
     mb.append(manaFill, manaTxt);
-    bottom.append(buffs, hb, mb);
+    const sb = el('div', 'bar stamina'); const stamFill = el('div', 'fill'); const stamTxt = el('div', 'txt');
+    sb.append(stamFill, stamTxt);
+    bottom.append(buffs, hb, mb, sb);
 
     const trainStats = el('div', 'train-stats');
     const corner = el('div', 'hud-corner');
@@ -244,6 +249,7 @@ export class UI {
       const refill = btn('Refill', 'small ghost', () => {
         if (!this.battle) return;
         this.battle.player.hp = this.battle.player.maxHp; this.battle.player.mana = this.battle.player.maxMana;
+        this.battle.player.stamina = this.battle.player.maxStamina;
         this.battle.cooldowns = {};
       });
       const exit = btn('Exit', 'small', () => this.leaveTraining());
@@ -268,6 +274,7 @@ export class UI {
     const row = el('div', 'pad-row');
     const left = el('button', 'dodge'); left.innerHTML = '◀<small>DODGE</small>';
     const right = el('button', 'dodge'); right.innerHTML = '▶<small>DODGE</small>';
+    const dodgeBtns = [left, right];
     const bind = (b: HTMLButtonElement, dir: -1 | 1): void => {
       b.addEventListener('pointerdown', e => { e.preventDefault(); this.dodge(dir); b.classList.add('pressed'); });
       b.addEventListener('pointerup', () => b.classList.remove('pressed'));
@@ -289,8 +296,8 @@ export class UI {
     this.arrangeControls();
     c.append(strip, row);
     this.hud = {
-      enemyName, enemyTag, enemyLvl, enemyFill, enemyShield, enemyTxt, hpFill, hpShield, hpTxt, manaFill, manaTxt, buffs, enemyBuffs,
-      trainStats, sparBtn, chips, castMsg, pad,
+      enemyName, enemyTag, enemyLvl, enemyFill, enemyShield, enemyTxt, hpFill, hpShield, hpTxt, manaFill, manaTxt, stamFill, stamTxt, buffs, enemyBuffs,
+      trainStats, sparBtn, chips, castMsg, pad, dodgeBtns,
     };
     this.setupPad(pad);
   }
@@ -335,7 +342,7 @@ export class UI {
         case 'interrupt': this.popup('INTERRUPTED', 'enemy', 'small', '#ffffff'); break;
         case 'revive': sfx.revive(); this.banner('REVIVED', 'The phoenix feather burns'); break;
         case 'death': if (ev.who === 'enemy') { sfx.win(); this.banner('VICTORY', ''); } else { sfx.lose(); this.banner('DEFEATED', ''); } break;
-        case 'fizzle': this.castMessage(ev.reason === 'mana' ? 'Not enough mana' : 'On cooldown', true); sfx.fizzle(); break;
+        case 'fizzle': this.castMessage(ev.reason === 'mana' ? 'Not enough mana' : ev.reason === 'stamina' ? 'Out of breath!' : 'On cooldown', true); sfx.fizzle(); break;
         default: break;
       }
     }
@@ -380,6 +387,10 @@ export class UI {
     h.hpTxt.textContent = `${fmt(Math.max(0, p.hp))} / ${fmt(p.maxHp)}${p.shield > 0 ? `  +${fmt(p.shield)}` : ''}`;
     setBar(h.manaFill, p.mana, p.maxMana);
     h.manaTxt.textContent = `${Math.floor(p.mana)} / ${p.maxMana}`;
+    setBar(h.stamFill, p.stamina, p.maxStamina);
+    h.stamTxt.textContent = `${Math.floor(p.stamina)} / ${p.maxStamina}`;
+    const tired = p.stamina < b.stats.dodgeCost;
+    for (const d of h.dodgeBtns) d.classList.toggle('tired', tired);
 
     const buffs: [string, string][] = [];
     if (p.shield > 0) buffs.push([`Shield ${fmt(p.shield)}`, '#6ea8ff']);
@@ -547,7 +558,7 @@ export class UI {
     setMusic('menu');
     const s = this.screens.result;
     s.innerHTML = '';
-    const card = el('div', 'result-card');
+    const card = el('div', 'result-card frame');
     const h2 = el('h2', outcome, outcome === 'win' ? 'VICTORY' : 'DEFEATED');
     const sub = el('div', 'sub', outcome === 'win'
       ? (level >= MAX_LEVEL ? `You defeated ${enemy.name}. The tower is yours!` : `${enemy.name} falls. Level ${level} cleared.`)
@@ -587,7 +598,7 @@ export class UI {
 
   private openOverlay(build: (box: HTMLElement, close: () => void) => void): void {
     this.overlay.innerHTML = '';
-    const box = el('div', 'box');
+    const box = el('div', 'box frame');
     const wasPaused = this.paused;
     this.paused = true;
     const close = (): void => { this.overlay.classList.remove('active'); this.overlay.innerHTML = ''; this.overlayDismiss = null; this.paused = wasPaused; this.lastT = performance.now(); };
@@ -691,11 +702,12 @@ export class UI {
   private renderUpgrades(body: HTMLElement): void {
     const stats = computeStats(this.save);
     const title = el('div', 'section-title');
-    title.innerHTML = `Character <small>HP ${stats.maxHp} · Mana ${stats.maxMana} · Regen ${stats.regen.toFixed(1)}/s · Power ${Math.round(stats.power * 100)}%</small>`;
+    title.innerHTML = `Character <small>HP ${stats.maxHp} · Mana ${stats.maxMana} · Regen ${stats.regen.toFixed(1)}/s · Power ${Math.round(stats.power * 100)}% · Stamina ${stats.maxStamina} (dodge ${stats.dodgeCost})</small>`;
     body.append(title);
     for (const u of UPGRADES) {
       const rank = this.save.upgrades[u.id] ?? 0;
       const row = el('div', 'row-card');
+      row.append(upgradeIcon(u.id, 48));
       const info = el('div', 'info');
       info.append(el('div', 'name', u.name), el('div', 'desc', u.desc));
       const pips = el('div', 'pips');
@@ -724,14 +736,18 @@ export class UI {
     for (const slot of EQUIP_SLOTS) {
       const title = el('div', 'section-title');
       const cur = this.save.equipped[slot.id];
-      title.innerHTML = `${slot.name} <small>${cur ? EQUIP_BY_ID[cur].name : 'nothing equipped'}</small>`;
+      const tl = el('span', 'with-icon'); tl.append(slotIcon(slot.id, 26), document.createTextNode(slot.name));
+      title.append(tl, el('small', '', cur ? EQUIP_BY_ID[cur].name : 'nothing equipped'));
       body.append(title);
       const grid = el('div', 'grid');
       for (const e of EQUIPMENT.filter(x => x.slot === slot.id)) {
         const owned = this.save.equipOwned.includes(e.id);
         const equipped = cur === e.id;
         const card = el('div', `card ${equipped ? 'equipped' : ''}`);
-        card.append(el('div', 'name', e.name), el('div', 'desc', e.desc));
+        const head = el('div', 'head'); const nb = el('div');
+        nb.append(el('div', 'name', e.name), el('div', 'kind', `${slot.name} · tier ${e.tier}`));
+        head.append(gearIcon(e.slot, e.tier), nb);
+        card.append(head, el('div', 'desc', e.desc));
         if (!owned) {
           const b = btn(`Buy · ${fmt(e.price)}`, 'gold', () => {
             if (this.save.coins < e.price) return;

@@ -3,6 +3,7 @@ import { defineConfig } from 'vite';
 // base './' => relative asset paths, required by YouTube Playables (no absolute paths).
 export default defineConfig({
   base: './',
+  assetsInclude: ['**/*.glb'],
   build: {
     target: 'es2018',
     assetsInlineLimit: 8192,

@@ -1,6 +1,9 @@
-// three.js arena: two low-poly wizards, projectiles, particles, lane telegraphs.
-// Everything is built from primitives so the bundle stays tiny and no models are needed.
+// three.js arena: Blender-built wizard and environment models (GLB), projectiles, particles, lane telegraphs.
+// If a model fails to load the arena falls back to primitives so the game always runs.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import wizardUrl from './assets/models/wizard.glb';
+import arenaUrl from './assets/models/arena.glb';
 import { ENEMY_Z, LANE_X, type EnemyTier } from './data';
 import type { Battle, BattleEvent, Projectile } from './battle';
 
@@ -22,35 +25,22 @@ function glowTexture(): THREE.Texture {
   return t;
 }
 
-function floorTexture(): THREE.Texture {
-  const c = document.createElement('canvas');
-  c.width = 256; c.height = 512;
-  const g = c.getContext('2d')!;
-  g.fillStyle = '#7a7a7a';
-  g.fillRect(0, 0, 256, 512);
-  // Stone noise.
-  for (let i = 0; i < 2600; i++) {
-    const v = 100 + Math.floor(Math.random() * 60);
-    g.fillStyle = `rgb(${v},${v},${v})`;
-    g.fillRect(Math.random() * 256, Math.random() * 512, 3 + Math.random() * 6, 3 + Math.random() * 6);
-  }
-  // Lane lines.
-  g.strokeStyle = 'rgba(255,255,255,0.18)';
-  g.lineWidth = 2;
-  for (const x of [64, 128, 192]) {
-    g.beginPath(); g.moveTo(x - 32, 0); g.lineTo(x - 32, 512); g.stroke();
-  }
-  g.beginPath(); g.moveTo(224, 0); g.lineTo(224, 512); g.stroke();
-  const t = new THREE.CanvasTexture(c);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  t.repeat.set(2, 3);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
-
 const GLOW = glowTexture();
-
 function col(hex: string): THREE.Color { return new THREE.Color(hex); }
+
+// ---- model cache -------------------------------------------------------------------
+let wizardModel: THREE.Group | null = null;
+let arenaModel: THREE.Group | null = null;
+let loadPromise: Promise<void> | null = null;
+
+/** Loads the GLB models once; safe to call early (during the splash) and again later. */
+export function preloadModels(): Promise<void> {
+  if (loadPromise) return loadPromise;
+  const loader = new GLTFLoader();
+  const load = (url: string): Promise<THREE.Group | null> => new Promise(res => loader.load(url, g => res(g.scene), undefined, () => res(null)));
+  loadPromise = Promise.all([load(wizardUrl), load(arenaUrl)]).then(([w, a]) => { wizardModel = w; arenaModel = a; });
+  return loadPromise;
+}
 
 // ---- particles ------------------------------------------------------------------
 class Particles {
@@ -120,90 +110,96 @@ class Particles {
 
 // ---- wizard -----------------------------------------------------------------------
 interface WizardLook { robe: string; hat: string; trim: string }
+type Std = THREE.MeshStandardMaterial;
 
 class Wizard {
   readonly group = new THREE.Group();
   private body = new THREE.Group();
-  private staffPivot = new THREE.Group();
-  private robeMat: THREE.MeshStandardMaterial;
-  private hatMat: THREE.MeshStandardMaterial;
-  private trimMat: THREE.MeshStandardMaterial;
-  private skinMat: THREE.MeshStandardMaterial;
-  private orbMat: THREE.MeshBasicMaterial;
-  private orbGlow: THREE.Sprite;
+  private staffPivot: THREE.Object3D = new THREE.Group();
+  private mats: Record<string, Std> = {};
+  private allMats: THREE.Material[] = [];
+  private orbMat!: THREE.MeshBasicMaterial;
+  private orbGlow!: THREE.Sprite;
   private shield: THREE.Mesh;
   private shieldWire: THREE.Mesh;
   private shieldMat: THREE.MeshBasicMaterial;
   private shieldWireMat: THREE.MeshBasicMaterial;
-  private allMats: THREE.Material[];
   readonly orb = new THREE.Object3D();
   bob = Math.random() * 6;
-  castT = 0;      // >0 while the staff is raised
-  hold = false;   // keep the staff raised (telegraph)
+  castT = 0;
+  hold = false;
   hitT = 0;
   tilt = 0;
   deathT = -1;
   frozen = false;
   phased = false;
   x = 0;
-  scale = 1;
 
-  constructor(look: WizardLook, facing: 1 | -1, scale = 1) {
-    this.scale = scale;
-    const flat = { flatShading: true, roughness: 0.85, metalness: 0.05 };
-    this.robeMat = new THREE.MeshStandardMaterial({ color: col(look.robe), ...flat });
-    this.hatMat = new THREE.MeshStandardMaterial({ color: col(look.hat), ...flat });
-    this.trimMat = new THREE.MeshStandardMaterial({ color: col(look.trim), ...flat });
-    this.skinMat = new THREE.MeshStandardMaterial({ color: col('#e8c39e'), ...flat });
-    const dark = new THREE.MeshStandardMaterial({ color: col('#26190f'), ...flat });
-    const wood = new THREE.MeshStandardMaterial({ color: col('#6b4a2b'), ...flat });
-    this.orbMat = new THREE.MeshBasicMaterial({ color: col(look.trim) });
-    this.allMats = [this.robeMat, this.hatMat, this.trimMat, this.skinMat, dark, wood, this.orbMat];
-    for (const m of this.allMats) m.transparent = true;
+  constructor(look: WizardLook, facing: 1 | -1) {
+    if (wizardModel) this.buildFromModel(look); else this.buildPrimitive(look);
 
-    const b = this.body;
-    const robe = new THREE.Mesh(new THREE.ConeGeometry(0.62, 1.75, 7), this.robeMat); robe.position.y = 0.87; b.add(robe);
-    const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.42, 0.12, 8), this.trimMat); belt.position.y = 1.15; b.add(belt);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), this.skinMat); head.position.y = 1.92; b.add(head);
-    for (const sx of [-0.1, 0.1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 6), dark); eye.position.set(sx, 1.96, 0.24); b.add(eye);
-    }
-    const beard = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.45, 6), this.trimMat);
-    beard.rotation.x = Math.PI; beard.position.set(0, 1.62, 0.16); b.add(beard);
-    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.64, 0.64, 0.06, 12), this.hatMat); brim.position.y = 2.12; b.add(brim);
-    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.95, 7), this.hatMat); hat.position.y = 2.6; hat.rotation.z = 0.12; b.add(hat);
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.44, 0.1, 8), this.trimMat); band.position.y = 2.2; b.add(band);
-
-    // Staff arm pivots at the shoulder so it can be raised to cast.
-    const sp = this.staffPivot; sp.position.set(0.42, 1.5, 0);
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.55, 6), this.robeMat);
-    arm.position.set(0.12, -0.25, 0); arm.rotation.z = -0.5; sp.add(arm);
-    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.1, 6), wood);
-    staff.position.set(0.28, -0.35, 0); sp.add(staff);
-    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 8), this.orbMat);
-    orb.position.set(0.28, 0.75, 0); sp.add(orb);
-    this.orb.position.copy(orb.position); sp.add(this.orb);
-    this.orbGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col(look.trim), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 }));
-    this.orbGlow.scale.set(0.9, 0.9, 1); this.orbGlow.position.copy(orb.position); sp.add(this.orbGlow);
-    b.add(sp);
-
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.65, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }));
-    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.015; this.group.add(shadow);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false }));
+    shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.02; this.group.add(shadow);
 
     this.shieldMat = new THREE.MeshBasicMaterial({ color: col('#6ea8ff'), transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
     this.shieldWireMat = new THREE.MeshBasicMaterial({ color: col('#bfe0ff'), transparent: true, opacity: 0, wireframe: true, depthWrite: false });
-    this.shield = new THREE.Mesh(new THREE.SphereGeometry(1.25, 14, 10), this.shieldMat); this.shield.position.y = 1.4;
-    this.shieldWire = new THREE.Mesh(new THREE.SphereGeometry(1.27, 10, 8), this.shieldWireMat); this.shieldWire.position.y = 1.4;
+    this.shield = new THREE.Mesh(new THREE.SphereGeometry(1.35, 14, 10), this.shieldMat); this.shield.position.y = 1.5;
+    this.shieldWire = new THREE.Mesh(new THREE.SphereGeometry(1.37, 10, 8), this.shieldWireMat); this.shieldWire.position.y = 1.5;
     this.group.add(this.shield, this.shieldWire);
 
-    b.rotation.y = facing === 1 ? 0 : Math.PI;
-    b.scale.setScalar(scale);
-    this.group.add(b);
+    this.body.rotation.y = facing === 1 ? 0 : Math.PI;
+    this.group.add(this.body);
+  }
+
+  private buildFromModel(look: WizardLook): void {
+    const inst = wizardModel!.clone(true);
+    const byName = new Map<string, Std>();
+    inst.traverse(o => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const src = m.material as Std;
+      let mat = byName.get(src.name);
+      if (!mat) { mat = src.clone(); mat.transparent = true; mat.flatShading = false; byName.set(src.name, mat); }
+      m.material = mat;
+    });
+    for (const [name, m] of byName) { this.mats[name] = m; this.allMats.push(m); }
+    const orbNode = inst.getObjectByName('Orb') as THREE.Mesh | undefined;
+    this.orbMat = new THREE.MeshBasicMaterial({ color: col(look.trim), transparent: true });
+    if (orbNode) { orbNode.material = this.orbMat; this.allMats.push(this.orbMat); }
+    this.staffPivot = inst.getObjectByName('ArmPivot') ?? new THREE.Group();
+    this.orbGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col(look.trim), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.85 }));
+    this.orbGlow.scale.set(1, 1, 1);
+    if (orbNode) { orbNode.add(this.orb, this.orbGlow); }
+    this.body.add(inst);
+    this.setLook(look);
+  }
+
+  private buildPrimitive(look: WizardLook): void {
+    const flat = { flatShading: true, roughness: 0.85, metalness: 0.05 };
+    const mk = (name: string, c: string): Std => { const m = new THREE.MeshStandardMaterial({ color: col(c), ...flat }); m.name = name; m.transparent = true; this.mats[name] = m; this.allMats.push(m); return m; };
+    const robe = mk('Robe', look.robe), hat = mk('Hat', look.hat), trim = mk('Trim', look.trim), skin = mk('Skin', '#e8c39e'), wood = mk('Wood', '#6b4a2b');
+    const b = this.body;
+    const add = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = b): THREE.Mesh => { const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z); parent.add(mesh); return mesh; };
+    add(new THREE.ConeGeometry(0.62, 1.75, 7), robe, 0, 0.87, 0);
+    add(new THREE.SphereGeometry(0.28, 10, 8), skin, 0, 1.92, 0);
+    add(new THREE.CylinderGeometry(0.64, 0.64, 0.06, 12), hat, 0, 2.12, 0);
+    add(new THREE.ConeGeometry(0.42, 0.95, 7), hat, 0, 2.6, 0);
+    add(new THREE.CylinderGeometry(0.36, 0.42, 0.12, 8), trim, 0, 1.15, 0);
+    const piv = new THREE.Group(); piv.position.set(0.42, 1.5, 0); b.add(piv); this.staffPivot = piv;
+    add(new THREE.CylinderGeometry(0.04, 0.05, 2.1, 6), wood, 0.28, -0.35, 0, piv);
+    this.orbMat = new THREE.MeshBasicMaterial({ color: col(look.trim), transparent: true }); this.allMats.push(this.orbMat);
+    const orb = add(new THREE.SphereGeometry(0.14, 8, 8), this.orbMat, 0.28, 0.75, 0, piv);
+    this.orbGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col(look.trim), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 }));
+    orb.add(this.orb, this.orbGlow);
   }
 
   setLook(look: WizardLook): void {
-    this.robeMat.color.set(look.robe); this.hatMat.color.set(look.hat); this.trimMat.color.set(look.trim);
-    this.orbMat.color.set(look.trim); (this.orbGlow.material as THREE.SpriteMaterial).color.set(look.trim);
+    this.mats.Robe?.color.set(look.robe);
+    this.mats.Cape?.color.set(look.hat);
+    this.mats.Hat?.color.set(look.hat);
+    this.mats.Trim?.color.set(look.trim);
+    this.orbMat.color.set(look.trim);
+    (this.orbGlow.material as THREE.SpriteMaterial).color.set(look.trim);
   }
 
   reset(): void { this.deathT = -1; this.hitT = 0; this.castT = 0; this.hold = false; this.frozen = false; this.phased = false; this.tilt = 0; this.body.rotation.x = 0; this.group.position.y = 0; }
@@ -223,26 +219,24 @@ class Wizard {
     this.group.position.x += (this.x - this.group.position.x) * Math.min(1, dt * 14);
     this.tilt *= Math.max(0, 1 - dt * 6);
     this.body.rotation.z = this.tilt;
-    const bobY = this.frozen ? 0 : Math.sin(this.bob * 2.2) * 0.04;
-    this.body.position.y = bobY;
+    this.body.position.y = this.frozen ? 0 : Math.sin(this.bob * 2.2) * 0.04;
 
-    // Staff raise.
     if (this.castT > 0) this.castT = Math.max(0, this.castT - dt * 2.4);
     const raise = this.hold ? 1 : Math.sin(Math.min(1, this.castT) * Math.PI);
     this.staffPivot.rotation.x += (-1.15 * raise - this.staffPivot.rotation.x) * Math.min(1, dt * 16);
-    const glow = 0.8 + raise * 0.9 + (this.hold ? Math.sin(time * 14) * 0.25 : 0);
+    const glow = 1 + raise * 0.9 + (this.hold ? Math.sin(time * 14) * 0.25 : 0);
     this.orbGlow.scale.set(glow, glow, 1);
 
-    // Hit flash and freeze tint.
     this.hitT = Math.max(0, this.hitT - dt * 3);
-    const em = this.robeMat.emissive;
+    const em = new THREE.Color();
     if (this.frozen) em.set('#3a8fd0'); else em.setRGB(this.hitT, this.hitT * 0.6, this.hitT * 0.6);
-    this.hatMat.emissive.copy(em).multiplyScalar(0.6);
-    this.skinMat.emissive.copy(em).multiplyScalar(0.4);
+    for (const [name, m] of Object.entries(this.mats)) {
+      const k = name === 'Robe' || name === 'Cape' ? 1 : name === 'Hat' ? 0.6 : 0.35;
+      m.emissive.copy(em).multiplyScalar(k);
+    }
     const op = this.phased ? 0.35 : 1;
     for (const m of this.allMats) m.opacity += (op - m.opacity) * Math.min(1, dt * 10);
 
-    // Death: topple over and sink.
     if (this.deathT >= 0) {
       this.deathT += dt;
       const k = Math.min(1, this.deathT / 1.1);
@@ -254,8 +248,22 @@ class Wizard {
   }
 }
 
+// ---- sky ---------------------------------------------------------------------------
+function makeSky(): { mesh: THREE.Mesh; top: THREE.Color; bottom: THREE.Color } {
+  const top = col('#1b2140'), bottom = col('#3a3f6e');
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { top: { value: top }, bottom: { value: bottom } },
+    vertexShader: 'varying float vY; void main(){ vY = normalize(position).y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 bottom; varying float vY; void main(){ float t = clamp(vY * 2.2 + 0.15, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, t), 1.0); }',
+    side: THREE.BackSide, depthWrite: false, fog: false,
+  });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(150, 24, 12), mat);
+  return { mesh, top, bottom };
+}
+
 // ---- arena ---------------------------------------------------------------------------
 interface ProjView { group: THREE.Group; p: Projectile; ring?: THREE.Mesh; last: THREE.Vector3 }
+const BRAZIERS: [number, number][] = [[-3.9, 3], [3.9, 3], [-3.9, -9], [3.9, -9], [-3.9, -21], [3.9, -21]];
 
 export class Arena {
   readonly renderer: THREE.WebGLRenderer;
@@ -265,14 +273,16 @@ export class Arena {
   readonly enemy: Wizard;
   private particles = new Particles();
   private projViews = new Map<number, ProjView>();
-  private laneMarkers: THREE.Mesh[] = [];
   private laneT: number[] = [0, 0, 0];
   private laneMat: THREE.MeshBasicMaterial[] = [];
-  private floorMat: THREE.MeshStandardMaterial;
   private portal: THREE.Mesh;
   private portalMat: THREE.MeshBasicMaterial;
   private torches: THREE.Sprite[] = [];
   private hemi: THREE.HemisphereLight;
+  private sun: THREE.DirectionalLight;
+  private sky: { mesh: THREE.Mesh; top: THREE.Color; bottom: THREE.Color };
+  private bannerMat: Std | null = null;
+  private moon: THREE.Sprite;
   private shake = 0;
   private time = 0;
   private tmp = new THREE.Vector3();
@@ -286,67 +296,81 @@ export class Arena {
     this.renderer.domElement.className = 'arena-canvas';
     container.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 80);
+    this.camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
     this.camera.position.set(0, 6.2, 9.4);
     this.camera.lookAt(0, 0.8, -6.5);
 
-    this.hemi = new THREE.HemisphereLight(0xbfd4ff, 0x30281f, 1.1);
+    this.hemi = new THREE.HemisphereLight(0xbfd4ff, 0x30281f, 0.55);
     this.scene.add(this.hemi);
-    const sun = new THREE.DirectionalLight(0xfff1d6, 1.5); sun.position.set(3, 9, 5); this.scene.add(sun);
-    const rim = new THREE.DirectionalLight(0x8ab4ff, 0.6); rim.position.set(-4, 5, -8); this.scene.add(rim);
+    this.sun = new THREE.DirectionalLight(0xfff1d6, 1.0); this.sun.position.set(4, 10, 6); this.scene.add(this.sun);
+    const rim = new THREE.DirectionalLight(0x8ab4ff, 0.5); rim.position.set(-4, 5, -10); this.scene.add(rim);
+    const fill = new THREE.DirectionalLight(0xffb060, 0.45); fill.position.set(0, 2, 6); this.scene.add(fill);
 
-    this.floorMat = new THREE.MeshStandardMaterial({ map: floorTexture(), color: col('#2c3358'), roughness: 1 });
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 70), this.floorMat);
-    floor.rotation.x = -Math.PI / 2; floor.position.z = -12; this.scene.add(floor);
+    this.sky = makeSky();
+    this.scene.add(this.sky.mesh);
+    this.moon = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col('#e8ecff'), transparent: true, depthWrite: false, fog: false }));
+    this.moon.position.set(-38, 48, -110); this.moon.scale.set(26, 26, 1); this.scene.add(this.moon);
+
+    // Environment: Blender model, or a plain floor as a fallback.
+    if (arenaModel) {
+      const env = arenaModel;
+      env.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const mat = m.material as Std;
+        if (mat.name === 'Banner') this.bannerMat = mat;
+        if (mat.name === 'Flame') m.material = new THREE.MeshBasicMaterial({ color: col('#ffb347') });
+        else if (mat.name.startsWith('Stone') && !mat.userData.darkened) { mat.color.multiplyScalar(0.62); mat.userData.darkened = true; }
+        m.frustumCulled = true;
+      });
+      this.scene.add(env);
+    } else {
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 70), new THREE.MeshStandardMaterial({ color: col('#2c3358'), roughness: 1 }));
+      floor.rotation.x = -Math.PI / 2; floor.position.z = -12; this.scene.add(floor);
+    }
+    for (const [x, z] of BRAZIERS) {
+      const t = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col('#ffb060'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+      t.position.set(x, 2.0, z); t.scale.set(2.2, 2.2, 1); this.scene.add(t); this.torches.push(t);
+    }
 
     // Rune rings under each wizard.
     for (const z of [0, ENEMY_Z]) {
-      const ring = new THREE.Mesh(new THREE.RingGeometry(1.9, 2.1, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, side: THREE.DoubleSide }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.02, z); this.scene.add(ring);
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.9, 2.1, 32), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(0, 0.03, z); this.scene.add(ring);
     }
-
     // Lane telegraph strips.
     for (let i = 0; i < 3; i++) {
       const m = new THREE.MeshBasicMaterial({ color: col('#ff4040'), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
       const strip = new THREE.Mesh(new THREE.PlaneGeometry(1.35, -ENEMY_Z + 1), m);
-      strip.rotation.x = -Math.PI / 2; strip.position.set(LANE_X[i], 0.03, ENEMY_Z / 2 + 0.5);
-      this.scene.add(strip); this.laneMarkers.push(strip); this.laneMat.push(m);
+      strip.rotation.x = -Math.PI / 2; strip.position.set(LANE_X[i], 0.04, ENEMY_Z / 2 + 0.5);
+      this.scene.add(strip); this.laneMat.push(m);
     }
-
-    // Pillars with torches.
-    const pillarMat = new THREE.MeshStandardMaterial({ color: col('#4a4a5e'), flatShading: true, roughness: 1 });
-    for (const x of [-4.6, 4.6]) {
-      for (const z of [3, -3, -9, -15, -21]) {
-        const p = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 5.5, 7), pillarMat);
-        p.position.set(x, 2.75, z); this.scene.add(p);
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.3, 0.9), pillarMat); cap.position.set(x, 5.6, z); this.scene.add(cap);
-        const torch = new THREE.Sprite(new THREE.SpriteMaterial({ map: GLOW, color: col('#ffb060'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-        torch.position.set(x, 6.1, z); torch.scale.set(1.6, 1.6, 1); this.scene.add(torch); this.torches.push(torch);
-      }
-    }
-    // Magic portal behind the enemy.
-    this.portalMat = new THREE.MeshBasicMaterial({ color: col('#8ab4ff'), transparent: true, opacity: 0.7 });
-    this.portal = new THREE.Mesh(new THREE.TorusGeometry(3.2, 0.22, 8, 40), this.portalMat);
-    this.portal.position.set(0, 3.6, ENEMY_Z - 9); this.scene.add(this.portal);
-    const portalInner = new THREE.Mesh(new THREE.CircleGeometry(3.0, 40), new THREE.MeshBasicMaterial({ color: col('#0a0a1a'), transparent: true, opacity: 0.85 }));
+    // Magic portal in the castle gate.
+    this.portalMat = new THREE.MeshBasicMaterial({ color: col('#8ab4ff'), transparent: true, opacity: 0.75 });
+    this.portal = new THREE.Mesh(new THREE.TorusGeometry(3.0, 0.2, 8, 40), this.portalMat);
+    this.portal.position.set(0, 3.4, ENEMY_Z - 12.5); this.scene.add(this.portal);
+    const portalInner = new THREE.Mesh(new THREE.CircleGeometry(2.85, 40), new THREE.MeshBasicMaterial({ color: col('#0a0a1a'), transparent: true, opacity: 0.9 }));
     portalInner.position.copy(this.portal.position); this.scene.add(portalInner);
 
-    this.player = new Wizard(PLAYER_LOOK, -1, 1);
-    this.player.group.position.set(0, 0, 0);
-    this.enemy = new Wizard({ robe: '#5b6b8c', hat: '#46527a', trim: '#c9d3ff' }, 1, 1);
+    this.player = new Wizard(PLAYER_LOOK, -1);
+    this.enemy = new Wizard({ robe: '#5b6b8c', hat: '#46527a', trim: '#c9d3ff' }, 1);
     this.enemy.group.position.set(0, 0, ENEMY_Z);
     this.scene.add(this.player.group, this.enemy.group, this.particles.points);
 
-    this.setTheme({ sky: '#1b2140', fog: '#1b2140', floor: '#2c3358', spell: '#8ab4ff' });
+    this.setTheme({ sky: '#1b2140', fog: '#1b2140', floor: '#2c3358', spell: '#8ab4ff', robe: '#5b6b8c' });
     this.resize();
   }
 
-  setTheme(t: { sky: string; fog: string; floor: string; spell: string }): void {
+  setTheme(t: { sky: string; fog: string; floor: string; spell: string; robe: string }): void {
     this.scene.background = col(t.sky);
-    this.scene.fog = new THREE.Fog(col(t.fog), 14, 42);
-    this.floorMat.color.set(t.floor);
+    this.scene.fog = new THREE.Fog(col(t.fog), 20, 70);
+    this.sky.top.set(t.sky);
+    this.sky.bottom.set(t.fog).lerp(col(t.spell), 0.35);
     this.portalMat.color.set(t.spell);
-    this.hemi.color.set(t.spell).lerp(new THREE.Color(0xffffff), 0.5);
+    this.hemi.color.set(t.spell).lerp(new THREE.Color(0xffffff), 0.4);
+    this.hemi.groundColor.set(t.fog);
+    this.sun.color.set('#fff1d6').lerp(col(t.spell), 0.3);
+    if (this.bannerMat) this.bannerMat.color.set(t.robe).lerp(col(t.spell), 0.25);
   }
 
   setEnemyLook(tier: EnemyTier, boss: boolean): void {
@@ -364,18 +388,15 @@ export class Arena {
     const w = Math.max(1, this.container.clientWidth), h = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(w, h, false);
     const aspect = w / h;
-    // Keep a sensible horizontal field of view on tall phones without going fisheye.
     const vfov = (2 * Math.atan(Math.tan((21 * Math.PI) / 360) / aspect) * 180) / Math.PI;
     this.camera.fov = Math.min(94, Math.max(44, vfov));
     this.camera.aspect = aspect;
-    // Tall screens pull the camera back a touch so both wizards fit.
     const back = aspect < 0.7 ? (0.7 - aspect) * 4 : 0;
     this.camera.position.set(0, 6.2 + back * 0.4, 9.4 + back);
     this.camera.lookAt(0, 0.8, -6.5);
     this.camera.updateProjectionMatrix();
   }
 
-  /** Projects a world point to CSS pixels inside the container. */
   project(v: THREE.Vector3): { x: number; y: number } {
     const p = this.tmp.copy(v).project(this.camera);
     return { x: ((p.x + 1) / 2) * this.container.clientWidth, y: ((1 - p.y) / 2) * this.container.clientHeight };
@@ -462,7 +483,6 @@ export class Arena {
       this.enemy.setShield(en.shield, false);
       if (en.freezeT > 0 || battle.over) this.enemy.hold = false;
 
-      // Sync projectiles.
       for (const pr of battle.projectiles) {
         if (pr.delayZ > 0) continue;
         let v = this.projViews.get(pr.id);
@@ -485,7 +505,7 @@ export class Arena {
       const on = this.laneT[i] > 0 ? 0.28 + Math.sin(this.time * 18) * 0.12 : 0;
       this.laneMat[i].opacity += (on - this.laneMat[i].opacity) * Math.min(1, dt * 12);
     }
-    this.torches.forEach((t, i) => { const f = 1.4 + Math.sin(this.time * 9 + i * 1.7) * 0.25 + Math.random() * 0.1; t.scale.set(f, f, 1); });
+    this.torches.forEach((t, i) => { const f = 2.0 + Math.sin(this.time * 9 + i * 1.7) * 0.3 + Math.random() * 0.15; t.scale.set(f, f, 1); });
     this.portal.rotation.z = this.time * 0.4;
     this.player.update(dt, this.time);
     this.enemy.update(dt, this.time);
@@ -493,11 +513,11 @@ export class Arena {
 
     this.shake = Math.max(0, this.shake - dt * 2.5);
     const s = this.shake * this.shake * 0.25;
+    const baseX = this.camera.position.x, baseY = this.camera.position.y;
     this.camera.position.x += (Math.random() - 0.5) * s;
     this.camera.position.y += (Math.random() - 0.5) * s;
     if (this.running) this.renderer.render(this.scene, this.camera);
-    this.camera.position.x = 0;
-    this.camera.position.y = this.camera.position.y - (this.camera.position.y - Math.round(this.camera.position.y * 1000) / 1000);
+    this.camera.position.x = baseX; this.camera.position.y = baseY;
     this.resizeIfNeeded();
   }
 

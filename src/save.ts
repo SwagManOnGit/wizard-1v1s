@@ -65,6 +65,7 @@ export function parseSave(raw: string | null): SaveData {
 export interface PlayerStats {
   maxHp: number; maxMana: number; regen: number; power: number; healMult: number; shieldMult: number;
   iframes: number; costMult: number; coinMult: number; slots: number; revive: number;
+  maxStamina: number; staminaRegen: number; dodgeCost: number;
 }
 
 export function computeStats(s: SaveData): PlayerStats {
@@ -81,6 +82,9 @@ export function computeStats(s: SaveData): PlayerStats {
     coinMult: 1,
     slots: BASE_SLOTS + r('grimoire'),
     revive: 0,
+    maxStamina: PLAYER_BASE.stamina + 12 * r('endurance'),
+    staminaRegen: PLAYER_BASE.staminaRegen,
+    dodgeCost: PLAYER_BASE.dodgeCost,
   };
   for (const slot of EQUIP_SLOTS) {
     const id = s.equipped[slot.id];
@@ -95,6 +99,10 @@ export function computeStats(s: SaveData): PlayerStats {
     st.shieldMult *= e.shieldMult ?? 1;
     st.coinMult *= e.coinMult ?? 1;
     st.revive = Math.max(st.revive, e.revive ?? 0);
+    st.maxStamina += e.stamina ?? 0;
+    st.staminaRegen += e.staminaRegen ?? 0;
+    st.dodgeCost *= e.dodgeCostMult ?? 1;
   }
+  st.dodgeCost = Math.round(st.dodgeCost);
   return st;
 }

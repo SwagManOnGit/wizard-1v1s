@@ -104,6 +104,7 @@ export const UPGRADES: UpgradeDef[] = [
   { id: 'power', name: 'Spell Power', desc: '+8% spell damage per rank', max: 30, basePrice: 90, growth: 1.3 },
   { id: 'resolve', name: 'Resolve', desc: '+10% healing and shields per rank', max: 10, basePrice: 100, growth: 1.4 },
   { id: 'agility', name: 'Agility', desc: 'Longer dodge invulnerability per rank', max: 5, basePrice: 150, growth: 1.6 },
+  { id: 'endurance', name: 'Endurance', desc: '+12 max stamina per rank (dodging costs stamina)', max: 10, basePrice: 90, growth: 1.35 },
   { id: 'grimoire', name: 'Grimoire', desc: '+1 spell slot in your loadout', max: 4, basePrice: 400, growth: 2.2 },
 ];
 export const UPGRADE_BY_ID: Record<string, UpgradeDef> = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
@@ -113,32 +114,38 @@ export function upgradePrice(u: UpgradeDef, rank: number): number {
 }
 
 // ---- equipment ----------------------------------------------------------------
-export type EquipSlot = 'wand' | 'robe' | 'charm';
+export type EquipSlot = 'wand' | 'robe' | 'charm' | 'boots';
 export interface EquipDef {
-  id: string; slot: EquipSlot; name: string; price: number; desc: string;
+  id: string; slot: EquipSlot; name: string; price: number; desc: string; tier: number;
   power?: number; hp?: number; mana?: number; regen?: number; costMult?: number;
   healMult?: number; shieldMult?: number; coinMult?: number; revive?: number;
+  stamina?: number; staminaRegen?: number; dodgeCostMult?: number;
 }
 export const EQUIPMENT: EquipDef[] = [
-  { id: 'wand1', slot: 'wand', name: 'Oak Wand', price: 150, power: 0.06, desc: '+6% spell damage' },
-  { id: 'wand2', slot: 'wand', name: 'Ember Wand', price: 450, power: 0.14, desc: '+14% spell damage' },
-  { id: 'wand3', slot: 'wand', name: 'Crystal Wand', price: 1100, power: 0.24, regen: 2, desc: '+24% damage, +2 mana regen' },
-  { id: 'wand4', slot: 'wand', name: 'Storm Wand', price: 2600, power: 0.36, desc: '+36% spell damage' },
-  { id: 'wand5', slot: 'wand', name: 'Archmage Wand', price: 6000, power: 0.5, costMult: 0.9, desc: '+50% damage, spells cost 10% less' },
-  { id: 'robe1', slot: 'robe', name: 'Linen Robe', price: 120, hp: 30, desc: '+30 max health' },
-  { id: 'robe2', slot: 'robe', name: 'Silk Robe', price: 400, hp: 80, desc: '+80 max health' },
-  { id: 'robe3', slot: 'robe', name: 'Enchanted Robe', price: 1000, hp: 160, shieldMult: 1.15, desc: '+160 health, +15% shields' },
-  { id: 'robe4', slot: 'robe', name: 'Dragonhide Robe', price: 2400, hp: 320, desc: '+320 max health' },
-  { id: 'robe5', slot: 'robe', name: 'Astral Robe', price: 5500, hp: 600, healMult: 1.2, desc: '+600 health, +20% healing' },
-  { id: 'charm1', slot: 'charm', name: 'Mana Bead', price: 140, mana: 25, desc: '+25 max mana' },
-  { id: 'charm2', slot: 'charm', name: 'Focus Ring', price: 420, regen: 3, desc: '+3 mana regen per second' },
-  { id: 'charm3', slot: 'charm', name: 'Lucky Coin', price: 900, coinMult: 1.2, desc: '+20% coins from battles' },
-  { id: 'charm4', slot: 'charm', name: 'Phoenix Feather', price: 2200, revive: 0.35, desc: 'Once per battle, revive with 35% health' },
-  { id: 'charm5', slot: 'charm', name: 'Chrono Amulet', price: 5000, costMult: 0.85, coinMult: 1.3, desc: 'Spells cost 15% less, +30% coins' },
+  { id: 'wand1', slot: 'wand', name: 'Oak Wand', price: 150, tier: 1, power: 0.06, desc: '+6% spell damage' },
+  { id: 'wand2', slot: 'wand', name: 'Ember Wand', price: 450, tier: 2, power: 0.14, desc: '+14% spell damage' },
+  { id: 'wand3', slot: 'wand', name: 'Crystal Wand', price: 1100, tier: 3, power: 0.24, regen: 2, desc: '+24% damage, +2 mana regen' },
+  { id: 'wand4', slot: 'wand', name: 'Storm Wand', price: 2600, tier: 4, power: 0.36, desc: '+36% spell damage' },
+  { id: 'wand5', slot: 'wand', name: 'Archmage Wand', price: 6000, tier: 5, power: 0.5, costMult: 0.9, desc: '+50% damage, spells cost 10% less' },
+  { id: 'robe1', slot: 'robe', name: 'Linen Robe', price: 120, tier: 1, hp: 30, desc: '+30 max health' },
+  { id: 'robe2', slot: 'robe', name: 'Silk Robe', price: 400, tier: 2, hp: 80, desc: '+80 max health' },
+  { id: 'robe3', slot: 'robe', name: 'Enchanted Robe', price: 1000, tier: 3, hp: 160, shieldMult: 1.15, desc: '+160 health, +15% shields' },
+  { id: 'robe4', slot: 'robe', name: 'Dragonhide Robe', price: 2400, tier: 4, hp: 320, desc: '+320 max health' },
+  { id: 'robe5', slot: 'robe', name: 'Astral Robe', price: 5500, tier: 5, hp: 600, healMult: 1.2, desc: '+600 health, +20% healing' },
+  { id: 'charm1', slot: 'charm', name: 'Mana Bead', price: 140, tier: 1, mana: 25, desc: '+25 max mana' },
+  { id: 'charm2', slot: 'charm', name: 'Focus Ring', price: 420, tier: 2, regen: 3, desc: '+3 mana regen per second' },
+  { id: 'charm3', slot: 'charm', name: 'Lucky Coin', price: 900, tier: 3, coinMult: 1.2, desc: '+20% coins from battles' },
+  { id: 'charm4', slot: 'charm', name: 'Phoenix Feather', price: 2200, tier: 4, revive: 0.35, desc: 'Once per battle, revive with 35% health' },
+  { id: 'charm5', slot: 'charm', name: 'Chrono Amulet', price: 5000, tier: 5, costMult: 0.85, coinMult: 1.3, desc: 'Spells cost 15% less, +30% coins' },
+  { id: 'boots1', slot: 'boots', name: 'Leather Boots', price: 130, tier: 1, stamina: 20, desc: '+20 max stamina' },
+  { id: 'boots2', slot: 'boots', name: 'Runner\'s Boots', price: 400, tier: 2, staminaRegen: 6, desc: '+6 stamina regen per second' },
+  { id: 'boots3', slot: 'boots', name: 'Windstep Boots', price: 950, tier: 3, dodgeCostMult: 0.8, desc: 'Dodging costs 20% less stamina' },
+  { id: 'boots4', slot: 'boots', name: 'Griffon Boots', price: 2300, tier: 4, stamina: 45, staminaRegen: 6, desc: '+45 stamina, +6 stamina regen' },
+  { id: 'boots5', slot: 'boots', name: 'Chrono Greaves', price: 5200, tier: 5, stamina: 30, dodgeCostMult: 0.65, desc: 'Dodging costs 35% less, +30 stamina' },
 ];
 export const EQUIP_BY_ID: Record<string, EquipDef> = Object.fromEntries(EQUIPMENT.map(e => [e.id, e]));
 export const EQUIP_SLOTS: { id: EquipSlot; name: string }[] = [
-  { id: 'wand', name: 'Wand' }, { id: 'robe', name: 'Robe' }, { id: 'charm', name: 'Charm' },
+  { id: 'wand', name: 'Wand' }, { id: 'robe', name: 'Robe' }, { id: 'charm', name: 'Charm' }, { id: 'boots', name: 'Boots' },
 ];
 
 // ---- enemies ------------------------------------------------------------------
@@ -194,5 +201,5 @@ function romanish(n: number): string {
 
 export const TRAINING_DUMMY_HP = 1_000_000;
 export const AD_REWARD = (level: number): number => 60 + 25 * level;
-export const PLAYER_BASE = { hp: 100, mana: 100, regen: 10, iframes: 0.3 };
+export const PLAYER_BASE = { hp: 100, mana: 100, regen: 10, iframes: 0.3, stamina: 100, staminaRegen: 22, dodgeCost: 30 };
 export const DODGE_TIME = 0.14;
