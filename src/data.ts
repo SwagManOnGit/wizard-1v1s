@@ -153,16 +153,16 @@ export interface EnemyTier {
   name: string; robe: string; hat: string; trim: string; spell: string; sky: string; floor: string; fog: string;
 }
 export const TIERS: EnemyTier[] = [
-  { name: 'Apprentice', robe: '#5b6b8c', hat: '#46527a', trim: '#c9d3ff', spell: '#8ab4ff', sky: '#1b2140', floor: '#2c3358', fog: '#1b2140' },
-  { name: 'Hedge Wizard', robe: '#4c7a45', hat: '#375c33', trim: '#d5f0a8', spell: '#a6ff5c', sky: '#15261a', floor: '#233a2a', fog: '#15261a' },
-  { name: 'Pyromancer', robe: '#a23a1d', hat: '#7a2513', trim: '#ffd48a', spell: '#ff7a1a', sky: '#2a1410', floor: '#3d1d18', fog: '#2a1410' },
-  { name: 'Frost Witch', robe: '#3f7fa8', hat: '#2a5c7f', trim: '#e2f8ff', spell: '#8be9ff', sky: '#0f2130', floor: '#1b3547', fog: '#0f2130' },
-  { name: 'Storm Caller', robe: '#4a3f8f', hat: '#332b6b', trim: '#ffe98a', spell: '#d4c3ff', sky: '#171433', floor: '#282350', fog: '#171433' },
-  { name: 'Necromancer', robe: '#2f3a2f', hat: '#1e261e', trim: '#9cff9c', spell: '#7dff7d', sky: '#0d130f', floor: '#1a241c', fog: '#0d130f' },
-  { name: 'Illusionist', robe: '#8c3f8a', hat: '#652b63', trim: '#ffc9f7', spell: '#ff8ff2', sky: '#24102a', floor: '#3a1c40', fog: '#24102a' },
-  { name: 'Warlock', robe: '#5a1f2e', hat: '#3d1420', trim: '#ff8a8a', spell: '#ff4a4a', sky: '#1c0a10', floor: '#2f121b', fog: '#1c0a10' },
-  { name: 'Void Sorcerer', robe: '#2a2140', hat: '#1a1430', trim: '#c58bff', spell: '#b04dff', sky: '#0b0716', floor: '#170f2a', fog: '#0b0716' },
-  { name: 'Archmage', robe: '#8a6d2a', hat: '#6b531f', trim: '#fff1b8', spell: '#ffe066', sky: '#1a1508', floor: '#2c2410', fog: '#1a1508' },
+  { name: 'Apprentice', robe: '#6a7fd8', hat: '#4a56b0', trim: '#e0e8ff', spell: '#8ab4ff', sky: '#2438a0', floor: '#3a4a90', fog: '#4a62c8' },
+  { name: 'Hedge Wizard', robe: '#4ea44a', hat: '#2f7a33', trim: '#e6ffb0', spell: '#a6ff5c', sky: '#1c6a4a', floor: '#2f6a3a', fog: '#3a9a6a' },
+  { name: 'Pyromancer', robe: '#e0481e', hat: '#a82a12', trim: '#ffd48a', spell: '#ff7a1a', sky: '#7a1a10', floor: '#6a2a1a', fog: '#c04a20' },
+  { name: 'Frost Witch', robe: '#4aa0e0', hat: '#2a6aa8', trim: '#eafcff', spell: '#8be9ff', sky: '#1a4a8a', floor: '#2a5a8a', fog: '#4a90d0' },
+  { name: 'Storm Caller', robe: '#6a4fd8', hat: '#4a32a8', trim: '#ffe98a', spell: '#d4c3ff', sky: '#2a1a7a', floor: '#3a2a80', fog: '#5a48c8' },
+  { name: 'Necromancer', robe: '#3f6a48', hat: '#264a30', trim: '#b0ffb0', spell: '#7dff7d', sky: '#0f2a1a', floor: '#1e3a28', fog: '#2a7a4a' },
+  { name: 'Illusionist', robe: '#c24fc0', hat: '#8a2f88', trim: '#ffd0f8', spell: '#ff8ff2', sky: '#5a1a70', floor: '#5a2a68', fog: '#b040c0' },
+  { name: 'Warlock', robe: '#9a2438', hat: '#6a1428', trim: '#ff9a9a', spell: '#ff4a4a', sky: '#4a0a18', floor: '#4a1a28', fog: '#a02040' },
+  { name: 'Void Sorcerer', robe: '#4a3a8a', hat: '#2a1f5a', trim: '#d0a0ff', spell: '#b04dff', sky: '#180a3a', floor: '#2a1a4a', fog: '#6a30c0' },
+  { name: 'Archmage', robe: '#d0a030', hat: '#a07820', trim: '#fff6c8', spell: '#ffe066', sky: '#5a4010', floor: '#5a4a20', fog: '#c09a30' },
 ];
 
 export const BOSS_NAMES = [

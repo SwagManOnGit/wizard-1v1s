@@ -1,14 +1,15 @@
 # Wizard 1v1s
 
-A wizard duelling game built as a **YouTube Playable**. Dodge left or right, draw glyphs to cast spells that lock on by themselves, beat 100 progressively harder wizards with a boss every 5 levels. Vanilla TypeScript, three.js for the arena with Blender-made GLB models, DOM for everything else. Medieval UI with the Cinzel and Almendra fonts, synthesised audio, ~1.1 MB total.
+A wizard duelling game built as a **YouTube Playable**. Dodge left or right, draw glyphs to cast spells that lock on by themselves, beat 100 progressively harder wizards with a boss every 5 levels. Vanilla TypeScript, three.js for the arena with Blender-made GLB models rendered PS2-style (textured low-poly, vertex lighting, low internal resolution), a 16-bit pixel UI (Jersey 10 font, CRT scanlines), synthesised audio, ~1.3 MB total.
 
 ## Gameplay
 
 - **Three lanes.** The enemy telegraphs which lane a bolt is aimed at (red strip), then fires. Tap the dodge buttons, swipe the arena, or use the arrow keys / A / D to change lane.
-- **Draw to cast.** Every spell has a single-stroke glyph. Draw it on the pad and the spell fires at the enemy. Tap a spell in the strip to see its glyph. Unclear strokes fizzle without costing mana.
+- **Draw to cast.** Every spell has a single-stroke glyph. Draw it on the pad and the spell fires at the enemy. Tap a spell in the strip to see its glyph at the size it needs. Unclear strokes fizzle without costing mana, and the stronger the spell the larger and cleaner the stroke must be (Spark spans a third of the pad, Meteor four fifths), so a tiny scribble cannot spam heavy spells.
 - **Mana** regenerates over time; expensive spells hit harder. A few utility spells also have cooldowns.
 - **Stamina** is spent by every dodge (30 of 100 by default) and regenerates quickly. Run dry and you are "out of breath" until it refills. The Endurance upgrade and the boots gear slot raise stamina, its regen, or lower the dodge cost.
 - **24 spells:** 5 starters (Spark, Fireball, Ice Shard, Ward, Mend), 19 in the shop. Attacks, shields, heals, a mirror shell, a phase step, freezes, slows, damage-over-time, mana restore, and heavy hitters like Meteor and Void Rift.
+- **Flow:** title screen, then a 100-tile level map (cleared, next, locked, bosses marked), then the battle. Shop and training are one tap from the title.
 - **Loadout** of 6 slots (up to 10 with the Grimoire upgrade). Only equipped spells are recognised, which keeps drawing accurate.
 - **Enemies** scale in health, damage and cast speed with level. From level 6 they fire double-lane bolts, from level 12 homing seekers (dodge late, or shield/reflect/phase), bosses add barrages, self-heals and shields. Ten enemy tiers with their own arena palette.
 - **Bosses** every 5 levels, 20 named bosses up to Archmage Zorvath at level 100.
@@ -60,11 +61,11 @@ Creates `wizard-1v1s-playable.zip` from `dist/` (index.html at the root). Upload
 | Audio follows YouTube mute | `isAudioEnabled` / `onAudioEnabledChange` gate the shared AudioContext in `src/audio.ts`; no mute button |
 | Rewarded ads only through YouTube | `ytgame.ads.requestRewardedAd('coins')` from the shop's Coins tab |
 | `sendScore` | Highest level cleared, sent when it improves; matches the save |
-| No external calls | No analytics or CDNs; fonts (Cinzel, Almendra, OFL), logo and GLB models are bundled; all audio is synthesised; the only network request is the SDK itself |
+| No external calls | No analytics or CDNs; the Jersey 10 font (OFL), logo and GLB models are bundled; textures are drawn on canvas at boot; all audio is synthesised; the only network request is the SDK itself |
 | All aspect ratios 9:32 to 32:9 | Portrait stacks arena over controls, landscape puts controls in a side panel; the 3D camera widens its field of view on tall screens |
 | Touch + mouse + keyboard | Pointer events for drawing and dodging, arrow keys / A / D dodge, Esc closes overlays and leaves training |
 | No exit button, no external links | None present |
-| Bundle size | ~1.1 MB uncompressed, 10 files, largest file 480 KB (three.js); the arena model is 377 KB and the wizard 95 KB |
+| Bundle size | ~1.3 MB uncompressed, 8 files, largest file 526 KB (three.js, slightly over the 512 KiB "should" guideline); the arena model is 491 KB and the wizard 168 KB |
 
 ## Project layout
 
@@ -73,7 +74,8 @@ Creates `wizard-1v1s-playable.zip` from `dist/` (index.html at the root). Upload
 - `src/recognizer.ts` - $1 unistroke recogniser (no rotation invariance, uniform scaling, stroke smoothing)
 - `src/battle.ts` - battle simulation (pure logic, emits events)
 - `src/scene.ts` - three.js arena: GLB wizard and environment models, sky dome, projectiles, particles, lane telegraphs
-- `src/icons.ts` - canvas-painted emblems for gear tiers and upgrades
+- `src/icons.ts` - pixel-art emblems for gear tiers and upgrades
+- `src/textures.ts` - procedural 64x64 nearest-filtered textures (stone, wood, cloth, gold, banner, roof) for the PS2 look
 - `src/ui.ts` - screens, HUD, draw pad, shop, training, result, fake ad
 - `src/save.ts` - save format, parsing and derived player stats
 - `src/audio.ts` - WebAudio synth for all effects and the generative music loop

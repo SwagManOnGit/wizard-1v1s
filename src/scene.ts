@@ -6,8 +6,20 @@ import wizardUrl from './assets/models/wizard.glb';
 import arenaUrl from './assets/models/arena.glb';
 import { ENEMY_Z, LANE_X, type EnemyTier } from './data';
 import type { Battle, BattleEvent, Projectile } from './battle';
+import { MATERIAL_TEXTURE, texture } from './textures';
 
-const PLAYER_LOOK = { robe: '#3b3f8f', hat: '#2b2f6e', trim: '#ffd166' };
+const PLAYER_LOOK = { robe: '#4a4fd0', hat: '#2e2fa8', trim: '#ffd23f' };
+/** Internal render resolution relative to CSS pixels: low on purpose for the PS2 look. */
+const RENDER_SCALE = 0.55;
+
+/** Converts a glTF PBR material into a Gouraud-shaded, textured material (vertex lighting, like the PS2). */
+function toLambert(src: THREE.Material, transparent: boolean): THREE.MeshLambertMaterial {
+  const color = (src as THREE.MeshStandardMaterial).color ?? new THREE.Color(1, 1, 1);
+  const kind = MATERIAL_TEXTURE[src.name];
+  const m = new THREE.MeshLambertMaterial({ color: color.clone(), map: kind ? texture(kind) : null, transparent });
+  m.name = src.name;
+  return m;
+}
 
 // ---- helpers ------------------------------------------------------------------
 function glowTexture(): THREE.Texture {
@@ -110,7 +122,7 @@ class Particles {
 
 // ---- wizard -----------------------------------------------------------------------
 interface WizardLook { robe: string; hat: string; trim: string }
-type Std = THREE.MeshStandardMaterial;
+type Std = THREE.MeshLambertMaterial;
 
 class Wizard {
   readonly group = new THREE.Group();
@@ -157,9 +169,9 @@ class Wizard {
     inst.traverse(o => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
-      const src = m.material as Std;
+      const src = m.material as THREE.Material;
       let mat = byName.get(src.name);
-      if (!mat) { mat = src.clone(); mat.transparent = true; mat.flatShading = false; byName.set(src.name, mat); }
+      if (!mat) { mat = toLambert(src, true); byName.set(src.name, mat); }
       m.material = mat;
     });
     for (const [name, m] of byName) { this.mats[name] = m; this.allMats.push(m); }
@@ -175,8 +187,7 @@ class Wizard {
   }
 
   private buildPrimitive(look: WizardLook): void {
-    const flat = { flatShading: true, roughness: 0.85, metalness: 0.05 };
-    const mk = (name: string, c: string): Std => { const m = new THREE.MeshStandardMaterial({ color: col(c), ...flat }); m.name = name; m.transparent = true; this.mats[name] = m; this.allMats.push(m); return m; };
+    const mk = (name: string, c: string): Std => { const m = new THREE.MeshLambertMaterial({ color: col(c), map: texture(MATERIAL_TEXTURE[name] ?? 'cloth') }); m.name = name; m.transparent = true; this.mats[name] = m; this.allMats.push(m); return m; };
     const robe = mk('Robe', look.robe), hat = mk('Hat', look.hat), trim = mk('Trim', look.trim), skin = mk('Skin', '#e8c39e'), wood = mk('Wood', '#6b4a2b');
     const b = this.body;
     const add = (geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number, parent: THREE.Object3D = b): THREE.Mesh => { const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z); parent.add(mesh); return mesh; };
@@ -291,8 +302,8 @@ export class Arena {
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: 'high-performance' });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2) * RENDER_SCALE);
     this.renderer.domElement.className = 'arena-canvas';
     container.appendChild(this.renderer.domElement);
 
@@ -314,18 +325,23 @@ export class Arena {
     // Environment: Blender model, or a plain floor as a fallback.
     if (arenaModel) {
       const env = arenaModel;
+      const converted = new Map<string, THREE.Material>();
       env.traverse(o => {
         const m = o as THREE.Mesh;
         if (!m.isMesh) return;
-        const mat = m.material as Std;
-        if (mat.name === 'Banner') this.bannerMat = mat;
-        if (mat.name === 'Flame') m.material = new THREE.MeshBasicMaterial({ color: col('#ffb347') });
-        else if (mat.name.startsWith('Stone') && !mat.userData.darkened) { mat.color.multiplyScalar(0.62); mat.userData.darkened = true; }
+        const src = m.material as THREE.Material;
+        let mat = converted.get(src.name);
+        if (!mat) {
+          if (src.name === 'Flame') mat = new THREE.MeshBasicMaterial({ color: col('#ffb347') });
+          else { const lam = toLambert(src, false); if (src.name === 'Banner') this.bannerMat = lam; if (src.name.startsWith('Stone')) lam.color.multiplyScalar(0.95); mat = lam; }
+          converted.set(src.name, mat);
+        }
+        m.material = mat;
         m.frustumCulled = true;
       });
       this.scene.add(env);
     } else {
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 70), new THREE.MeshStandardMaterial({ color: col('#2c3358'), roughness: 1 }));
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 70), new THREE.MeshLambertMaterial({ color: col('#7a7a90'), map: texture('stone', 12) }));
       floor.rotation.x = -Math.PI / 2; floor.position.z = -12; this.scene.add(floor);
     }
     for (const [x, z] of BRAZIERS) {

@@ -1,12 +1,14 @@
-// Hand-painted canvas icons for gear and upgrades, so the shop has emblems without image files.
+// Pixel-art emblems for gear and upgrades: painted small on canvas and scaled up with crisp edges.
 import type { EquipSlot } from './data';
 
-export const TIER_COLORS = ['#b08d57', '#c9ced6', '#ffcf40', '#b98cff', '#ff8a3d'];   // bronze, silver, gold, arcane, legendary
+export const TIER_COLORS = ['#c98b4a', '#d8dce8', '#ffd23f', '#c77dff', '#ff7a3d'];   // bronze, silver, gold, arcane, legendary
+/** Internal pixel size of every emblem; CSS scales it up with image-rendering: pixelated. */
+export const ICON_PX = 24;
 
 type Painter = (g: CanvasRenderingContext2D, s: number, c: string) => void;
 
 function stroke(g: CanvasRenderingContext2D, c: string, w: number): void {
-  g.strokeStyle = c; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round';
+  g.strokeStyle = c; g.lineWidth = w; g.lineCap = 'butt'; g.lineJoin = 'miter';
 }
 
 function star(g: CanvasRenderingContext2D, cx: number, cy: number, r: number, n = 4): void {
@@ -21,36 +23,33 @@ function star(g: CanvasRenderingContext2D, cx: number, cy: number, r: number, n 
 
 const GEAR: Record<EquipSlot, Painter> = {
   wand(g, s, c) {
-    stroke(g, '#7a4b22', s * 0.09);
-    g.beginPath(); g.moveTo(s * 0.25, s * 0.78); g.lineTo(s * 0.68, s * 0.34); g.stroke();
-    stroke(g, '#5a3315', s * 0.03); g.stroke();
-    g.fillStyle = c; star(g, s * 0.72, s * 0.28, s * 0.16, 4); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.7)'; star(g, s * 0.72, s * 0.28, s * 0.06, 4); g.fill();
+    stroke(g, '#8a5a2a', s * 0.1);
+    g.beginPath(); g.moveTo(s * 0.25, s * 0.78); g.lineTo(s * 0.66, s * 0.36); g.stroke();
+    g.fillStyle = c; star(g, s * 0.7, s * 0.3, s * 0.18, 4); g.fill();
+    g.fillStyle = '#ffffff'; g.fillRect(s * 0.66, s * 0.26, s * 0.08, s * 0.08);
   },
   robe(g, s, c) {
     g.fillStyle = c;
     g.beginPath();
-    g.moveTo(s * 0.5, s * 0.18); g.lineTo(s * 0.36, s * 0.24); g.lineTo(s * 0.2, s * 0.42); g.lineTo(s * 0.28, s * 0.5);
-    g.lineTo(s * 0.24, s * 0.84); g.lineTo(s * 0.76, s * 0.84); g.lineTo(s * 0.72, s * 0.5); g.lineTo(s * 0.8, s * 0.42);
-    g.lineTo(s * 0.64, s * 0.24); g.closePath(); g.fill();
-    stroke(g, 'rgba(0,0,0,0.35)', s * 0.03); g.beginPath(); g.moveTo(s * 0.5, s * 0.22); g.lineTo(s * 0.5, s * 0.82); g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.moveTo(s * 0.5, s * 0.18); g.lineTo(s * 0.42, s * 0.34); g.lineTo(s * 0.58, s * 0.34); g.closePath(); g.fill();
+    g.moveTo(s * 0.5, s * 0.18); g.lineTo(s * 0.34, s * 0.26); g.lineTo(s * 0.2, s * 0.44); g.lineTo(s * 0.28, s * 0.52);
+    g.lineTo(s * 0.24, s * 0.84); g.lineTo(s * 0.76, s * 0.84); g.lineTo(s * 0.72, s * 0.52); g.lineTo(s * 0.8, s * 0.44);
+    g.lineTo(s * 0.66, s * 0.26); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(s * 0.47, s * 0.26, s * 0.06, s * 0.56);
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(s * 0.38, s * 0.22, s * 0.08, s * 0.1);
   },
   charm(g, s, c) {
-    stroke(g, '#c9a24a', s * 0.05);
-    g.beginPath(); g.moveTo(s * 0.32, s * 0.16); g.quadraticCurveTo(s * 0.5, s * 0.02, s * 0.68, s * 0.16); g.stroke();
-    g.beginPath(); g.moveTo(s * 0.5, s * 0.36); g.lineTo(s * 0.32, s * 0.16); g.moveTo(s * 0.5, s * 0.36); g.lineTo(s * 0.68, s * 0.16); g.stroke();
-    g.fillStyle = c; g.beginPath(); g.moveTo(s * 0.5, s * 0.34); g.lineTo(s * 0.74, s * 0.56); g.lineTo(s * 0.5, s * 0.86); g.lineTo(s * 0.26, s * 0.56); g.closePath(); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.45)'; g.beginPath(); g.moveTo(s * 0.5, s * 0.4); g.lineTo(s * 0.62, s * 0.54); g.lineTo(s * 0.5, s * 0.6); g.lineTo(s * 0.38, s * 0.54); g.closePath(); g.fill();
+    stroke(g, '#ffd23f', s * 0.07);
+    g.beginPath(); g.moveTo(s * 0.32, s * 0.2); g.lineTo(s * 0.5, s * 0.08); g.lineTo(s * 0.68, s * 0.2); g.lineTo(s * 0.5, s * 0.38); g.closePath(); g.stroke();
+    g.fillStyle = c; g.beginPath(); g.moveTo(s * 0.5, s * 0.36); g.lineTo(s * 0.76, s * 0.58); g.lineTo(s * 0.5, s * 0.88); g.lineTo(s * 0.24, s * 0.58); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(s * 0.42, s * 0.46, s * 0.1, s * 0.1);
   },
   boots(g, s, c) {
     g.fillStyle = c;
     g.beginPath();
-    g.moveTo(s * 0.34, s * 0.16); g.lineTo(s * 0.58, s * 0.16); g.lineTo(s * 0.58, s * 0.56); g.lineTo(s * 0.8, s * 0.7); g.lineTo(s * 0.8, s * 0.82);
-    g.lineTo(s * 0.26, s * 0.82); g.lineTo(s * 0.26, s * 0.6); g.lineTo(s * 0.34, s * 0.5); g.closePath(); g.fill();
-    g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(s * 0.26, s * 0.74, s * 0.54, s * 0.08);
-    g.fillStyle = 'rgba(255,255,255,0.4)'; g.fillRect(s * 0.34, s * 0.16, s * 0.24, s * 0.07);
-    stroke(g, 'rgba(255,255,255,0.5)', s * 0.03); g.beginPath(); g.moveTo(s * 0.62, s * 0.4); g.lineTo(s * 0.9, s * 0.34); g.moveTo(s * 0.62, s * 0.48); g.lineTo(s * 0.88, s * 0.46); g.stroke();
+    g.moveTo(s * 0.34, s * 0.14); g.lineTo(s * 0.6, s * 0.14); g.lineTo(s * 0.6, s * 0.56); g.lineTo(s * 0.82, s * 0.7); g.lineTo(s * 0.82, s * 0.84);
+    g.lineTo(s * 0.24, s * 0.84); g.lineTo(s * 0.24, s * 0.6); g.lineTo(s * 0.34, s * 0.5); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.4)'; g.fillRect(s * 0.24, s * 0.74, s * 0.58, s * 0.1);
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.fillRect(s * 0.34, s * 0.14, s * 0.26, s * 0.08);
   },
 };
 
@@ -60,85 +59,80 @@ const UPGRADE: Record<string, Painter> = {
     g.beginPath(); g.moveTo(s * 0.5, s * 0.84);
     g.bezierCurveTo(s * 0.1, s * 0.56, s * 0.16, s * 0.16, s * 0.5, s * 0.34);
     g.bezierCurveTo(s * 0.84, s * 0.16, s * 0.9, s * 0.56, s * 0.5, s * 0.84); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.35)'; g.beginPath(); g.ellipse(s * 0.36, s * 0.38, s * 0.07, s * 0.05, -0.6, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(s * 0.32, s * 0.34, s * 0.1, s * 0.1);
   },
   wisdom(g, s, c) {
-    stroke(g, '#d9cfa8', s * 0.05);
-    g.beginPath(); g.moveTo(s * 0.42, s * 0.14); g.lineTo(s * 0.58, s * 0.14); g.lineTo(s * 0.58, s * 0.34);
-    g.quadraticCurveTo(s * 0.86, s * 0.5, s * 0.74, s * 0.84); g.lineTo(s * 0.26, s * 0.84); g.quadraticCurveTo(s * 0.14, s * 0.5, s * 0.42, s * 0.34); g.closePath(); g.stroke();
-    g.fillStyle = c; g.beginPath(); g.moveTo(s * 0.3, s * 0.56); g.quadraticCurveTo(s * 0.5, s * 0.5, s * 0.7, s * 0.56); g.lineTo(s * 0.72, s * 0.8); g.lineTo(s * 0.28, s * 0.8); g.closePath(); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.6)'; g.beginPath(); g.arc(s * 0.6, s * 0.66, s * 0.04, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#e8e8ff'; g.fillRect(s * 0.4, s * 0.1, s * 0.2, s * 0.22);
+    g.fillStyle = c; g.beginPath(); g.moveTo(s * 0.4, s * 0.32); g.lineTo(s * 0.6, s * 0.32); g.lineTo(s * 0.8, s * 0.62); g.lineTo(s * 0.74, s * 0.88); g.lineTo(s * 0.26, s * 0.88); g.lineTo(s * 0.2, s * 0.62); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(s * 0.58, s * 0.62, s * 0.1, s * 0.1);
   },
   focus(g, s, c) {
-    stroke(g, c, s * 0.06);
-    g.beginPath(); g.moveTo(s * 0.14, s * 0.5); g.quadraticCurveTo(s * 0.5, s * 0.1, s * 0.86, s * 0.5); g.quadraticCurveTo(s * 0.5, s * 0.9, s * 0.14, s * 0.5); g.stroke();
-    g.fillStyle = c; g.beginPath(); g.arc(s * 0.5, s * 0.5, s * 0.15, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#1a1030'; g.beginPath(); g.arc(s * 0.5, s * 0.5, s * 0.07, 0, Math.PI * 2); g.fill();
+    stroke(g, c, s * 0.08);
+    g.beginPath(); g.moveTo(s * 0.12, s * 0.5); g.quadraticCurveTo(s * 0.5, s * 0.08, s * 0.88, s * 0.5); g.quadraticCurveTo(s * 0.5, s * 0.92, s * 0.12, s * 0.5); g.stroke();
+    g.fillStyle = c; g.beginPath(); g.arc(s * 0.5, s * 0.5, s * 0.17, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#10082a'; g.fillRect(s * 0.44, s * 0.44, s * 0.12, s * 0.12);
   },
   power(g, s, c) {
     g.fillStyle = c;
-    g.beginPath(); g.moveTo(s * 0.5, s * 0.1); g.quadraticCurveTo(s * 0.86, s * 0.42, s * 0.66, s * 0.72);
-    g.quadraticCurveTo(s * 0.72, s * 0.86, s * 0.5, s * 0.9); g.quadraticCurveTo(s * 0.28, s * 0.86, s * 0.34, s * 0.72);
-    g.quadraticCurveTo(s * 0.14, s * 0.42, s * 0.5, s * 0.1); g.fill();
-    g.fillStyle = '#fff3a8'; g.beginPath(); g.moveTo(s * 0.5, s * 0.42); g.quadraticCurveTo(s * 0.66, s * 0.62, s * 0.5, s * 0.82); g.quadraticCurveTo(s * 0.34, s * 0.62, s * 0.5, s * 0.42); g.fill();
+    g.beginPath(); g.moveTo(s * 0.5, s * 0.08); g.quadraticCurveTo(s * 0.9, s * 0.42, s * 0.68, s * 0.74);
+    g.quadraticCurveTo(s * 0.74, s * 0.9, s * 0.5, s * 0.92); g.quadraticCurveTo(s * 0.26, s * 0.9, s * 0.32, s * 0.74);
+    g.quadraticCurveTo(s * 0.1, s * 0.42, s * 0.5, s * 0.08); g.fill();
+    g.fillStyle = '#fff3a8'; g.beginPath(); g.moveTo(s * 0.5, s * 0.42); g.quadraticCurveTo(s * 0.68, s * 0.64, s * 0.5, s * 0.84); g.quadraticCurveTo(s * 0.32, s * 0.64, s * 0.5, s * 0.42); g.fill();
   },
   resolve(g, s, c) {
     g.fillStyle = c;
-    g.beginPath(); g.moveTo(s * 0.5, s * 0.1); g.lineTo(s * 0.84, s * 0.22); g.quadraticCurveTo(s * 0.84, s * 0.68, s * 0.5, s * 0.9);
-    g.quadraticCurveTo(s * 0.16, s * 0.68, s * 0.16, s * 0.22); g.closePath(); g.fill();
-    stroke(g, 'rgba(255,255,255,0.55)', s * 0.06); g.beginPath(); g.moveTo(s * 0.5, s * 0.28); g.lineTo(s * 0.5, s * 0.7); g.moveTo(s * 0.32, s * 0.44); g.lineTo(s * 0.68, s * 0.44); g.stroke();
+    g.beginPath(); g.moveTo(s * 0.5, s * 0.08); g.lineTo(s * 0.86, s * 0.22); g.lineTo(s * 0.8, s * 0.6); g.lineTo(s * 0.5, s * 0.92); g.lineTo(s * 0.2, s * 0.6); g.lineTo(s * 0.14, s * 0.22); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillRect(s * 0.46, s * 0.26, s * 0.08, s * 0.44); g.fillRect(s * 0.3, s * 0.42, s * 0.4, s * 0.08);
   },
   agility(g, s, c) {
-    stroke(g, c, s * 0.07);
-    g.beginPath(); g.moveTo(s * 0.18, s * 0.76); g.quadraticCurveTo(s * 0.3, s * 0.3, s * 0.82, s * 0.2); g.quadraticCurveTo(s * 0.7, s * 0.66, s * 0.3, s * 0.7); g.stroke();
-    stroke(g, 'rgba(255,255,255,0.5)', s * 0.03); g.beginPath(); g.moveTo(s * 0.24, s * 0.7); g.lineTo(s * 0.78, s * 0.24); g.stroke();
+    stroke(g, c, s * 0.09);
+    g.beginPath(); g.moveTo(s * 0.16, s * 0.78); g.quadraticCurveTo(s * 0.3, s * 0.3, s * 0.84, s * 0.18); g.quadraticCurveTo(s * 0.7, s * 0.66, s * 0.3, s * 0.72); g.stroke();
+    stroke(g, 'rgba(255,255,255,0.7)', s * 0.04); g.beginPath(); g.moveTo(s * 0.24, s * 0.7); g.lineTo(s * 0.78, s * 0.24); g.stroke();
   },
   endurance(g, s, c) {
     g.fillStyle = c;
-    g.beginPath(); g.moveTo(s * 0.56, s * 0.08); g.lineTo(s * 0.26, s * 0.54); g.lineTo(s * 0.48, s * 0.54); g.lineTo(s * 0.4, s * 0.92); g.lineTo(s * 0.76, s * 0.42); g.lineTo(s * 0.54, s * 0.42); g.closePath(); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.45)'; g.beginPath(); g.moveTo(s * 0.56, s * 0.12); g.lineTo(s * 0.34, s * 0.5); g.lineTo(s * 0.44, s * 0.5); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(s * 0.58, s * 0.06); g.lineTo(s * 0.24, s * 0.54); g.lineTo(s * 0.48, s * 0.54); g.lineTo(s * 0.4, s * 0.94); g.lineTo(s * 0.78, s * 0.42); g.lineTo(s * 0.54, s * 0.42); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.6)'; g.fillRect(s * 0.44, s * 0.2, s * 0.08, s * 0.16);
   },
   grimoire(g, s, c) {
-    g.fillStyle = '#5a3a1e'; g.beginPath(); g.roundRect(s * 0.2, s * 0.14, s * 0.6, s * 0.72, s * 0.05); g.fill();
-    g.fillStyle = c; g.beginPath(); g.roundRect(s * 0.26, s * 0.2, s * 0.5, s * 0.6, s * 0.03); g.fill();
-    g.fillStyle = '#e8d5a8'; g.fillRect(s * 0.74, s * 0.2, s * 0.06, s * 0.6);
-    stroke(g, 'rgba(255,255,255,0.7)', s * 0.04); g.beginPath(); g.arc(s * 0.5, s * 0.5, s * 0.12, 0, Math.PI * 2); g.moveTo(s * 0.5, s * 0.38); g.lineTo(s * 0.5, s * 0.62); g.stroke();
+    g.fillStyle = '#6a3a1e'; g.fillRect(s * 0.18, s * 0.12, s * 0.64, s * 0.76);
+    g.fillStyle = c; g.fillRect(s * 0.24, s * 0.18, s * 0.5, s * 0.64);
+    g.fillStyle = '#f0e0b0'; g.fillRect(s * 0.74, s * 0.18, s * 0.08, s * 0.64);
+    g.fillStyle = 'rgba(255,255,255,0.8)'; g.fillRect(s * 0.34, s * 0.36, s * 0.3, s * 0.06); g.fillRect(s * 0.46, s * 0.28, s * 0.06, s * 0.22);
   },
 };
 
-function makeCanvas(size: number, paint: (g: CanvasRenderingContext2D) => void): HTMLCanvasElement {
+export function makePixelCanvas(px: number, cssSize: number, paint: (g: CanvasRenderingContext2D) => void): HTMLCanvasElement {
   const c = document.createElement('canvas');
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  c.width = size * dpr; c.height = size * dpr;
-  c.style.width = `${size}px`; c.style.height = `${size}px`;
+  c.width = px; c.height = px;
+  c.style.width = `${cssSize}px`; c.style.height = `${cssSize}px`;
+  c.style.imageRendering = 'pixelated';
   const g = c.getContext('2d')!;
-  g.scale(dpr, dpr);
+  g.imageSmoothingEnabled = false;
   paint(g);
   return c;
 }
 
 /** Medallion background shared by all emblems. */
 function medallion(g: CanvasRenderingContext2D, s: number, rim: string): void {
-  const grad = g.createRadialGradient(s * 0.4, s * 0.35, s * 0.05, s * 0.5, s * 0.5, s * 0.5);
-  grad.addColorStop(0, '#3a2a55'); grad.addColorStop(1, '#16102a');
-  g.fillStyle = grad; g.beginPath(); g.arc(s / 2, s / 2, s * 0.47, 0, Math.PI * 2); g.fill();
-  stroke(g, rim, s * 0.05); g.stroke();
-  stroke(g, 'rgba(255,255,255,0.25)', s * 0.015); g.beginPath(); g.arc(s / 2, s / 2, s * 0.41, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = rim; g.fillRect(s * 0.08, s * 0.08, s * 0.84, s * 0.84);
+  g.fillStyle = '#2a1a5e'; g.fillRect(s * 0.16, s * 0.16, s * 0.68, s * 0.68);
+  g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(s * 0.16, s * 0.16, s * 0.68, s * 0.08);
 }
 
 export function gearIcon(slot: EquipSlot, tier: number, size = 44): HTMLCanvasElement {
   const color = TIER_COLORS[Math.max(0, Math.min(TIER_COLORS.length - 1, tier - 1))];
-  return makeCanvas(size, g => { medallion(g, size, color); GEAR[slot](g, size, color); });
+  return makePixelCanvas(ICON_PX, size, g => { medallion(g, ICON_PX, color); GEAR[slot](g, ICON_PX, color); });
 }
 
 export function upgradeIcon(id: string, size = 44): HTMLCanvasElement {
   const colors: Record<string, string> = {
-    vitality: '#ff4d6d', wisdom: '#4fc3ff', focus: '#c9b3ff', power: '#ff7a1a', resolve: '#6ea8ff', agility: '#d8fff4', endurance: '#ffd166', grimoire: '#9b5cff',
+    vitality: '#ff4d6d', wisdom: '#4fc3ff', focus: '#c9b3ff', power: '#ff7a1a', resolve: '#6ea8ff', agility: '#a8fff0', endurance: '#ffd23f', grimoire: '#b06cff',
   };
   const paint = UPGRADE[id];
-  return makeCanvas(size, g => { medallion(g, size, '#c9a24a'); if (paint) paint(g, size, colors[id] ?? '#ffffff'); });
+  return makePixelCanvas(ICON_PX, size, g => { medallion(g, ICON_PX, '#ffd23f'); if (paint) paint(g, ICON_PX, colors[id] ?? '#ffffff'); });
 }
 
 export function slotIcon(slot: EquipSlot, size = 28): HTMLCanvasElement {
-  return makeCanvas(size, g => GEAR[slot](g, size, '#d9cfa8'));
+  return makePixelCanvas(ICON_PX, size, g => GEAR[slot](g, ICON_PX, '#ffe9a8'));
 }

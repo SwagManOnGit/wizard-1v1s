@@ -3,11 +3,11 @@ import logoUrl from './assets/swag-logo.png';
 import { setMusic, sfx, unlockAudio } from './audio';
 import { Battle, type BattleEvent } from './battle';
 import {
-  AD_REWARD, EQUIPMENT, EQUIP_BY_ID, EQUIP_SLOTS, MAX_LEVEL, SPELLS, SPELL_BY_ID, UPGRADES, enemyForLevel, upgradePrice,
+  AD_REWARD, EQUIPMENT, EQUIP_BY_ID, EQUIP_SLOTS, MAX_LEVEL, SPELLS, SPELL_BY_ID, UPGRADES, enemyForLevel, isBossLevel, upgradePrice,
   type EnemyDef, type SpellDef,
 } from './data';
 import { GLYPHS, drawGlyph, type Point } from './glyphs';
-import { gearIcon, slotIcon, upgradeIcon } from './icons';
+import { gearIcon, makePixelCanvas, slotIcon, upgradeIcon } from './icons';
 import { Recognizer } from './recognizer';
 import { computeStats, type SaveData } from './save';
 import { Arena } from './scene';
@@ -29,13 +29,23 @@ function btn(label: string, cls = '', onClick?: () => void): HTMLButtonElement {
 }
 
 function glyphCanvas(spell: SpellDef, size = 44): HTMLCanvasElement {
-  const c = el('canvas');
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  c.width = size * dpr; c.height = size * dpr;
-  const g = c.getContext('2d')!;
-  g.scale(dpr, dpr);
-  drawGlyph(g, spell.glyph, size * 0.14, size * 0.14, size * 0.72, spell.color, 3);
-  return c;
+  const px = 28;
+  return makePixelCanvas(px, size, g => {
+    g.fillStyle = '#1a1250'; g.fillRect(0, 0, px, px);
+    g.fillStyle = '#2a2080'; g.fillRect(1, 1, px - 2, px - 2);
+    drawGlyph(g, spell.glyph, px * 0.15, px * 0.15, px * 0.7, spell.color, 2.4);
+  });
+}
+
+function strokeExtent(pts: Point[]): number {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of pts) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
+  return Math.max(maxX - minX, maxY - minY);
+}
+
+/** Fraction of the pad a glyph must span: cheap spells stay quick, big spells demand a big, deliberate stroke. */
+function requiredCoverage(spell: SpellDef): number {
+  return Math.min(0.68, 0.28 + 0.42 * (spell.cost / 65));
 }
 
 const fmt = (n: number): string => Math.round(n).toLocaleString('en-US');
@@ -49,7 +59,7 @@ export function showSplash(root: HTMLElement): Promise<void> {
   return new Promise(res => setTimeout(res, 1500));
 }
 
-type ScreenId = 'menu' | 'battle' | 'result' | 'shop';
+type ScreenId = 'menu' | 'levels' | 'battle' | 'result' | 'shop';
 type ShopTab = 'spells' | 'upgrades' | 'gear' | 'coins' | 'training';
 
 export class UI {
@@ -93,7 +103,7 @@ export class UI {
 
     root.innerHTML = '';
     this.screens = {
-      menu: el('div', 'screen'), battle: el('div', 'screen'), result: el('div', 'screen'), shop: el('div', 'screen'),
+      menu: el('div', 'screen'), levels: el('div', 'screen'), battle: el('div', 'screen'), result: el('div', 'screen'), shop: el('div', 'screen'),
     };
     for (const [id, s] of Object.entries(this.screens)) { s.id = id; root.append(s); }
     this.overlay = el('div', 'overlay');
@@ -133,33 +143,56 @@ export class UI {
     setMusic('menu');
     const m = this.screens.menu;
     m.innerHTML = '';
-    const title = el('div', 'title'); title.innerHTML = 'WIZARD <span>1v1s</span>';
-    const sub = el('div', 'subtitle', 'Dodge. Draw. Destroy.');
+    const title = el('div', 'title'); title.innerHTML = 'WIZARD<span>1v1s</span>';
+    const sub = el('div', 'subtitle', '~ Dodge. Draw. Destroy. ~');
     const card = el('div', 'menu-card frame');
 
     const coins = el('div', 'coins', fmt(this.save.coins));
     const best = el('div', 'stats-line', this.save.best ? `Best: level ${this.save.best} cleared` : 'No levels cleared yet');
-    const pickRow = el('div', 'level-pick');
-    const maxPick = Math.min(MAX_LEVEL, this.save.best + 1);
-    const lvl = el('div', 'lvl');
-    const renderLvl = (): void => {
-      const e = enemyForLevel(this.pickedLevel);
-      lvl.innerHTML = `Level ${this.pickedLevel}<small class="${e.boss ? 'boss' : ''}">${e.boss ? 'BOSS: ' : ''}${e.name}</small>`;
-      prev.disabled = this.pickedLevel <= 1;
-      next.disabled = this.pickedLevel >= maxPick;
-    };
-    const prev = btn('◀', 'small', () => { this.pickedLevel = Math.max(1, this.pickedLevel - 1); renderLvl(); });
-    const next = btn('▶', 'small', () => { this.pickedLevel = Math.min(maxPick, this.pickedLevel + 1); renderLvl(); });
-    pickRow.append(prev, lvl, next);
-    renderLvl();
-
-    const play = btn('BATTLE', 'gold big', () => this.startBattle(this.pickedLevel, false));
+    const play = btn('PLAY', 'gold big', () => this.showLevels());
     const row = el('div', 'menu-row');
-    row.append(btn('Shop', '', () => this.showShop('spells')), btn('Training', '', () => this.startBattle(this.pickedLevel, true)));
-    card.append(coins, el('div', 'divider'), pickRow, play, row, el('div', 'divider'), best);
+    row.append(btn('Shop', 'blue', () => this.showShop('spells')), btn('Training', 'green', () => this.startBattle(Math.min(MAX_LEVEL, Math.max(1, this.save.best)), true)));
+    card.append(coins, play, row, best);
     const howto = el('div', 'howto', 'Draw a spell glyph on the pad to cast it. Spells lock on by themselves. Tap the side buttons (or swipe) to dodge the enemy\'s bolts. Win coins, buy spells, beat 100 levels.');
     m.append(title, sub, card, howto);
     this.show('menu');
+  }
+
+  showLevels(): void {
+    this.stopLoop();
+    setMusic('menu');
+    const s = this.screens.levels;
+    s.innerHTML = '';
+    const head = el('div', 'shop-head');
+    head.append(btn('◀', 'small ghost', () => this.showMenu()), el('h1', '', 'CHOOSE A LEVEL'), el('div', 'coins', fmt(this.save.coins)));
+    const body = el('div', 'levels-body');
+    const grid = el('div', 'level-grid');
+    const maxPick = Math.min(MAX_LEVEL, this.save.best + 1);
+    if (this.pickedLevel > maxPick) this.pickedLevel = maxPick;
+    const info = el('div', 'level-info');
+    const foot = el('div', 'shop-foot');
+    const tiles: HTMLElement[] = [];
+    const renderInfo = (): void => {
+      const e = enemyForLevel(this.pickedLevel);
+      const cleared = this.pickedLevel <= this.save.best;
+      info.innerHTML = `<b>Level ${this.pickedLevel}</b> <span class="${e.boss ? 'boss' : ''}">${e.boss ? 'BOSS: ' : ''}${e.name}</span><small>${fmt(e.hp)} HP · ${e.damage} dmg per hit · ${cleared ? `cleared, replay pays ${fmt(Math.round(e.coins * 0.6))}` : `${fmt(e.coins)} coins`}</small>`;
+      tiles.forEach((t, i) => t.classList.toggle('picked', i + 1 === this.pickedLevel));
+    };
+    for (let L = 1; L <= MAX_LEVEL; L++) {
+      const boss = isBossLevel(L);
+      const state = L <= this.save.best ? 'done' : L === maxPick ? 'next' : 'locked';
+      const t = el('button', `level-tile ${state} ${boss ? 'boss' : ''}`);
+      t.innerHTML = `<b>${L}</b>${boss ? '<i>BOSS</i>' : ''}`;
+      if (state === 'locked') t.disabled = true;
+      else t.addEventListener('click', () => { unlockAudio(); sfx.click(); this.pickedLevel = L; renderInfo(); });
+      tiles.push(t); grid.append(t);
+    }
+    body.append(grid);
+    foot.append(btn('BATTLE', 'gold big', () => this.startBattle(this.pickedLevel, false)));
+    s.append(head, body, info, foot);
+    renderInfo();
+    this.show('levels');
+    tiles[this.pickedLevel - 1]?.scrollIntoView({ block: 'center' });
   }
 
   // ---------------------------------------------------------------- battle
@@ -311,7 +344,7 @@ export class UI {
     const inBattle = this.screens.battle.classList.contains('active') && this.battle;
     if (e.key === 'Escape') {
       if (this.overlay.classList.contains('active')) { if (this.overlayDismiss) this.overlayDismiss(); return; }
-      if (this.screens.shop.classList.contains('active') || this.screens.result.classList.contains('active')) { this.showMenu(); return; }
+      if (this.screens.shop.classList.contains('active') || this.screens.result.classList.contains('active') || this.screens.levels.classList.contains('active')) { this.showMenu(); return; }
       if (inBattle) { if (this.training) this.leaveTraining(); else this.confirmForfeit(); }
       return;
     }
@@ -483,6 +516,22 @@ export class UI {
       return;
     }
     const spell = SPELL_BY_ID[m.key];
+    // Stronger spells need a clearer and larger stroke, so a tiny scribble cannot spam them.
+    if (m.score < RECOGNIZE_THRESHOLD + 0.1 * (spell.cost / 65)) {
+      pad.classList.add('bad');
+      this.castMessage(`Draw ${spell.name} more clearly`, true);
+      sfx.fizzle();
+      return;
+    }
+    const rect = pad.getBoundingClientRect();
+    const coverage = strokeExtent(this.padPoints) / Math.max(1, Math.min(rect.width, rect.height));
+    if (coverage < requiredCoverage(spell)) {
+      pad.classList.add('bad');
+      this.castMessage(`Draw ${spell.name} bigger!`, true);
+      this.padHint = spell; this.padHintT = 1.6;
+      sfx.fizzle();
+      return;
+    }
     const r = b.cast(spell.id);
     if (r === 'ok') { pad.classList.add('ok'); this.castMessage(`${spell.name}!`, false); }
     else pad.classList.add('bad');
@@ -501,7 +550,8 @@ export class UI {
     g.beginPath(); g.arc(w / 2, h / 2, Math.min(w, h) * 0.3, 0, Math.PI * 2); g.stroke();
     g.restore();
     if (this.padHint) {
-      const size = Math.min(w, h) * 0.6;
+      // Ghost glyph drawn at the size the spell actually requires (templates fill ~86% of their box).
+      const size = (Math.min(w, h) * requiredCoverage(this.padHint)) / 0.86;
       g.save(); g.globalAlpha = 0.35 + Math.min(1, this.padHintT) * 0.3;
       drawGlyph(g, this.padHint.glyph, (w - size) / 2, (h - size) / 2, size, this.padHint.color, 4 * dpr);
       g.restore();
@@ -597,6 +647,8 @@ export class UI {
   }
 
   private openOverlay(build: (box: HTMLElement, close: () => void) => void): void {
+    // Never nest overlays: the previous one restores its pause state first.
+    if (this.overlayDismiss) this.overlayDismiss();
     this.overlay.innerHTML = '';
     const box = el('div', 'box frame');
     const wasPaused = this.paused;

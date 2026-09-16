@@ -33,6 +33,7 @@ async function boot(): Promise<void> {
   const save = parseSave(raw);
 
   const ui = new UI(root, save, () => { void sdk.saveData(JSON.stringify(save)); });
+  if (import.meta.env.DEV) (window as unknown as { __wiz: { ui: UI } }).__wiz.ui = ui;
   sdk.setFallbackRewardedAd(() => ui.showFakeAd());
 
   sdk.onPause(() => {
